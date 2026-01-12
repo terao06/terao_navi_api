@@ -1,0 +1,230 @@
+openapi: 3.0.3
+info:
+  title: Terao Navi API
+  description: |
+    LLMとベクトルデータベースを活用した質問応答システムを提供するナビゲーションAPIです。
+    
+    ## 認証方式
+    
+    このAPIは Bearer Token認証を使用します。
+    - トークン形式: `client_id:client_secret`
+    - ヘッダー: `Authorization: Bearer {client_id}:{client_secret}`
+    
+    ## 初期データ
+    
+    開発環境では、コンテナ起動時に動作確認用の認証情報が自動生成されます。
+    詳細は `local_data/credential/test_credential.txt` を参照してください。
+    
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: http://localhost:8005
+    description: ローカル開発環境
+  - url: https://api.example.com
+    description: 本番環境
+
+tags:
+  - name: Question
+    description: 質問応答に関するエンドポイント
+
+paths:
+  /ask:
+    post:
+      tags:
+        - Question
+      summary: 質問を送信して回答を取得
+      description: |
+        ユーザーからの質問を受け取り、LLMとベクトルデータベースを使用して適切な回答を生成します。
+        
+        ### 処理フロー
+        1. 質問内容をベクトル化
+        2. ベクトルデータベースから関連情報を検索
+        3. LLMを使用して回答を生成
+        4. 回答を返却
+        
+      operationId: askQuestion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+            examples:
+              basic:
+                summary: 基本的な質問
+                value:
+                  question: "この製品の使い方を教えてください"
+              with_app_id:
+                summary: アプリケーションIDを指定した質問
+                value:
+                  application_id: 1
+                  question: "トラブルシューティングの方法は？"
+      responses:
+        '200':
+          description: 成功レスポンス
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResponse'
+              examples:
+                success:
+                  summary: 成功時のレスポンス
+                  value:
+                    status: "success"
+                    data:
+                      answer: "製品の使い方については、以下の手順に従ってください..."
+        '400':
+          description: リクエストエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_request:
+                  summary: 不正なリクエスト
+                  value:
+                    status: "error"
+                    message: "質問内容が空です"
+                    error_code: "INVALID_REQUEST"
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: 認証失敗
+                  value:
+                    status: "error"
+                    message: "認証に失敗しました"
+                    error_code: "UNAUTHORIZED"
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                server_error:
+                  summary: サーバー内部エラー
+                  value:
+                    status: "error"
+                    message: "内部エラーが発生しました"
+                    error_code: "INTERNAL_SERVER_ERROR"
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: ヘルスチェック
+      description: APIサーバーの稼働状態を確認します
+      operationId: healthCheck
+      responses:
+        '200':
+          description: サーバーが正常に稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-01-12T10:30:00Z"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: "client_id:client_secret"
+      description: |
+        Bearer Token認証
+        
+        形式: `Authorization: Bearer {client_id}:{client_secret}`
+        
+        例: `Authorization: Bearer adb83002d4d9a6e362df4bf6b899db7c:f53e8aa23f072d5367915ebcea2bc3cd099968c354662ecc9bd03bc950a26ce0`
+
+  schemas:
+    QuestionRequest:
+      type: object
+      required:
+        - question
+      properties:
+        application_id:
+          type: integer
+          nullable: true
+          description: アプリケーションID（オプション）
+          example: 1
+        question:
+          type: string
+          description: 質問内容
+          minLength: 1
+          maxLength: 1000
+          example: "この製品の使い方を教えてください"
+      example:
+        application_id: 1
+        question: "この製品の使い方を教えてください"
+
+    QuestionResponse:
+      type: object
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: string
+          description: レスポンスステータス
+          enum: [success]
+          example: "success"
+        data:
+          type: object
+          required:
+            - answer
+          properties:
+            answer:
+              type: string
+              description: LLMが生成した回答
+              example: "製品の使い方については、以下の手順に従ってください..."
+          description: レスポンスデータ（response_wrapperデコレーターによって自動的にラップされます）
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          description: レスポンスステータス
+          enum: [error]
+          example: "error"
+        message:
+          type: string
+          description: エラーメッセージ
+          example: "認証に失敗しました"
+        error_code:
+          type: string
+          description: エラーコード
+          example: "UNAUTHORIZED"
+        details:
+          type: object
+          description: 詳細なエラー情報
+          additionalProperties: true
+          example:
+            field: "question"
+            reason: "必須項目です"
+
+security:
+  - bearerAuth: []

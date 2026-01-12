@@ -1,0 +1,12 @@
+{
+    "user": "root",
+    "password": "rootpassword",
+    "host": "navi-api-db",
+    "port": 3306,
+    "database": "db_local",
+    "pool_size": 10,
+    "max_overflow": 10,
+    "pool_timeout": 10,
+    "pool_recycle": 10,
+    "pool_pre_ping": 0
+}

@@ -1,0 +1,2 @@
+INSERT INTO manuals (manual_id, application_id, manual_name, file_extension, is_deleted, deleted_at, created_at, updated_at) VALUES (101, 101, 'Test Manual', 's3://bucket/manual.pdf', 0, NULL, NOW(), NOW());
+INSERT INTO manuals (manual_id, application_id, manual_name, file_extension, is_deleted, deleted_at, created_at, updated_at) VALUES (102, 101, 'Deleted Manual', 's3://bucket/deleted.pdf', 1, '2023-01-01 00:00:00', NOW(), NOW());

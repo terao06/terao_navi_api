@@ -1,0 +1,31 @@
+.git
+.venv
+__pycache__
+local_data
+.pytest_cache
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+# LLMモデルを除外（volumesでマウントするため不要）
+local_setting/local_app/llm_models/
+# テストファイルを除外
+tests/
+# ドキュメントを除外
+*.md
+!README.md
+# 環境設定ファイルを除外
+.env*
+.gitignore
+docker-compose.yml
+DOCKER_BUILD_GUIDE.md
+requirements_dev.txt
+# LLMモデルを除外（volumesでマウントするため）
+local_setting/local_app/llm_models/
+# ビルドに不要な大容量ファイルを除外
+tests/
+*.md
+!README.md
+.env*
+.gitignore
+docker-compose.yml
