@@ -5,6 +5,7 @@
 ## 目次
 
 - [前提条件](#前提条件)
+- [システム構成](#システム構成)
 - [プロジェクト構成](#プロジェクト構成)
 - [初期設定](#初期設定)
   - [1. Embeddingモデルの準備](#1-embeddingモデルの準備)
@@ -13,7 +14,8 @@
 - [アプリケーションの起動](#アプリケーションの起動)
 - [動作確認](#動作確認)
 - [停止と再起動](#停止と再起動)
-- [トラブルシューティング](#トラブルシューティング)
+- [開発時の注意事項](#開発時の注意事項)
+- [ライセンス](#ライセンス)
 
 ## 前提条件
 
@@ -34,6 +36,19 @@ COMPOSE_PARALLEL_LIMIT=2
 理由: `COMPOSE_PARALLEL_LIMIT` は Docker Compose の並列実行数を制限する環境変数です。ローカル開発マシン（特にメモリや CPU に制約がある Windows ノートPC）で複数コンテナを同時にビルド／起動するとリソース競合やビルド失敗、OOM（メモリ不足）を引き起こすことがあります。並列数を 2 に制限することでビルド／起動の安定性が向上します。
 
 注意: 必要に応じてこの値を増減してください（例: 高性能マシンでは `4` など）。
+
+## システム構成
+### 構成図
+![システム構成図](docs/diagram.svg)
+
+
+### 解説
+- `navi-api-app` : FastAPIアプリケーション。エンドポイントは外部クライアント（ブラウザ、curl、APIクライアント）からのHTTPを受け付けます。
+- `navi-api-db` : MySQL。アプリの主な永続データを保持します（ユーザー、マニュアル等）。
+- `navi-api-minio` : S3互換ストレージ。ファイル、マニュアルPDFやアセットを保存します。
+- `navi-api-vector-db` : ベクトル検索用のPostgres（拡張）など。埋め込みベクトルの保存・検索を担当します。
+- `navi-api-dynamodb` : ローカルDynamoDB（必要に応じて）。
+- `local_setting/local_app/llm_models` はコンテナ内部に `/models` としてマウントされ、埋め込みモデルやローカルLLMモデルの配置先になります。embedding_setting.json の `model_name` はコンテナ内のパス（例: `/models/bge-m3`）を指すようにしてください。
 
 ## プロジェクト構成
 
@@ -420,101 +435,6 @@ make up-d
 make rebuild
 ```
 
-## トラブルシューティング
-
-### モデルが読み込めない
-
-**症状**: アプリケーション起動時に「モデルが見つかりません」というエラーが出る
-
-**解決策**:
-1. `local_setting/local_app/llm_models/` ディレクトリにモデルファイルが存在するか確認
-2. `embedding_setting.json` のパスが正しいか確認（コンテナ内パス `/models/` を使用）
-3. コンテナを再起動:
-   - **Windows:** `.\make.ps1 restart`
-   - **Mac/Linux:** `make restart`
-
-### データベース接続エラー
-
-**症状**: 「Connection refused」や「Unknown database」エラーが出る
-
-**解決策**:
-1. データベースコンテナが起動しているか確認:
-   - **Windows:** `.\make.ps1 ps`
-   - **Mac/Linux:** `make ps`
-2. データベースのヘルスチェックが完了しているか確認:
-   - **Windows:** `.\make.ps1 logs-app`
-   - **Mac/Linux:** `make logs-app`
-3. 初期化スクリプトが実行されたか確認
-4. 必要であればコンテナを再起動:
-   - **Windows:** `.\make.ps1 restart`
-   - **Mac/Linux:** `make restart`
-
-### ポートが既に使用されている
-
-**症状**: 「port is already allocated」エラーが出る
-
-**解決策**:
-1. 使用中のポートを確認: `netstat -ano | findstr :8005`
-2. `docker-compose.yml` でポート番号を変更
-3. または、使用中のプロセスを停止
-
-### ディスク容量不足
-
-**症状**: コンテナが起動しない、またはデータ書き込みエラーが出る
-
-**解決策**:
-1. 不要なDockerイメージとコンテナを削除:
-   - **Windows:** `docker system prune -a`
-   - **Mac/Linux:** `docker system prune -a`
-2. `local_data/` ディレクトリのサイズを確認し、必要に応じて古いデータを削除
-3. すべてのプロジェクトデータを削除して再起動:
-   - **Windows:** `.\make.ps1 clean` → `.\make.ps1 up-d`
-   - **Mac/Linux:** `make clean` → `make up-d`
-
-### LLM APIへの接続エラー
-
-**症状**: 「Connection timeout」や「API key invalid」エラーが出る
-
-**解決策**:
-1. Ollamaサーバーが起動しているか確認（Ollamaを使用している場合）
-2. `llm_setting.json` の `base_url` と `api_key` が正しいか確認
-3. ネットワーク接続を確認
-4. OpenAI APIを使用する場合、API利用制限を確認
-
-### コンテナログの確認方法
-
-**Windows (PowerShell):**
-```powershell
-# すべてのサービスのログを表示
-.\make.ps1 logs
-
-# アプリケーションのログのみ表示
-.\make.ps1 logs-app
-```
-
-**Mac/Linux:**
-```bash
-# すべてのサービスのログを表示
-make logs
-
-# アプリケーションのログのみ表示
-make logs-app
-```
-
-**または、docker composeコマンドを直接使用:**
-```powershell
-# 特定のコンテナのログを表示
-docker compose logs <サービス名>
-
-# 例
-docker compose logs navi-api-app
-docker compose logs navi-api-db
-docker compose logs navi-api-vector-db
-
-# 最新の100行のみ表示
-docker compose logs --tail=100 navi-api-app
-```
-
 ## 開発時の注意事項
 
 ### ホットリロード
@@ -532,7 +452,8 @@ docker compose logs --tail=100 navi-api-app
 
 ### データベーススキーマの変更
 
-マイグレーションファイルを `local_setting/local_mysql/migrations/` に配置し、コンテナを再起動してください。
+マイグレーションファイルを `local_setting/local_mysql/migrations/` に配置し、コンテナを再起動してください。  
+※ API内ではSQLAlchemyを使用していますが、管理画面をDjangoで実装しているためDBのスキーマもDjangoの仕様となっています。
 
 ## ライセンス
 
