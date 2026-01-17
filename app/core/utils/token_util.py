@@ -15,33 +15,26 @@ class TokenUtil:
     - exp_epoch_sec: integer epoch seconds (UTC)
     - sig_b64url: base64url(HMAC_SHA256(secret, random + "." + exp)) without padding
     """
-
-    @staticmethod
-    def _secret_key() -> bytes:
-        key = os.getenv("ACCESS_TOKEN_SECRET", "change-me")
-        return key.encode("utf-8")
-
-    @staticmethod
-    def _refresh_secret_key() -> bytes:
-        key = os.getenv("REFRESH_TOKEN_SECRET", "change-me-refresh")
-        return key.encode("utf-8")
-
     @staticmethod
     def _b64url_no_pad(data: bytes) -> str:
         return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
 
     @staticmethod
-    def _sign(payload: str) -> str:
-        mac = hmac.new(TokenUtil._secret_key(), payload.encode("utf-8"), sha256)
+    def _sign(payload: str, secret_key: str) -> str:
+        mac = hmac.new(secret_key.encode("utf-8"), payload.encode("utf-8"), sha256)
         return TokenUtil._b64url_no_pad(mac.digest())
 
     @staticmethod
-    def _sign_refresh(payload: str) -> str:
-        mac = hmac.new(TokenUtil._refresh_secret_key(), payload.encode("utf-8"), sha256)
+    def _sign_refresh(payload: str, refresh_secret_key: str) -> str:
+        mac = hmac.new(refresh_secret_key.encode("utf-8"), payload.encode("utf-8"), sha256)
         return TokenUtil._b64url_no_pad(mac.digest())
 
     @staticmethod
-    def generate_access_token(random_part: str, expires_at: datetime, company_id: int) -> str:
+    def generate_access_token(
+        random_part: str,
+        expires_at: datetime,
+        company_id: int,
+        secret_key: str) -> str:
         """
         Create a signed, URL-safe token with embedded expiry.
 
@@ -55,11 +48,15 @@ class TokenUtil:
         """
         exp = int(expires_at.timestamp())
         payload = f"{random_part}.{company_id}.{exp}"
-        sig = TokenUtil._sign(payload)
+        sig = TokenUtil._sign(payload, secret_key)
         return f"{payload}.{sig}"
 
     @staticmethod
-    def generate_refresh_token(random_part: str, expires_at: datetime, company_id: int) -> str:
+    def generate_refresh_token(
+        random_part: str,
+        expires_at: datetime,
+        company_id: int,
+        refresh_secret_key: str) -> str:
         """
         Create a signed, URL-safe refresh token with embedded expiry.
 
@@ -67,11 +64,11 @@ class TokenUtil:
         """
         exp = int(expires_at.timestamp())
         payload = f"{random_part}.{company_id}.{exp}"
-        sig = TokenUtil._sign_refresh(payload)
+        sig = TokenUtil._sign_refresh(payload, refresh_secret_key)
         return f"{payload}.{sig}"
 
     @staticmethod
-    def verify_access_token(token: str) -> tuple[bool, int | None]:
+    def verify_access_token(token: str, secret_key: str) -> tuple[bool, int | None]:
         """
         Verify token signature and return embedded expiry epoch seconds.
 
@@ -80,18 +77,12 @@ class TokenUtil:
         """
         try:
             parts = token.split(".")
-            if len(parts) == 3:
-                random_part, exp_str, sig = parts
-                payload = f"{random_part}.{exp_str}"
-            elif len(parts) == 4:
-                random_part, company_id_str, exp_str, sig = parts
-                payload = f"{random_part}.{company_id_str}.{exp_str}"
-            else:
-                return False, None
+            random_part, company_id_str, exp_str, sig = parts
+            payload = f"{random_part}.{company_id_str}.{exp_str}"
             # Basic format checks
             if not exp_str.isdigit():
                 return False, None
-            expected_sig = TokenUtil._sign(payload)
+            expected_sig = TokenUtil._sign(payload, secret_key)
             if not hmac.compare_digest(sig, expected_sig):
                 return False, None
             return True, int(exp_str)
@@ -99,7 +90,7 @@ class TokenUtil:
             return False, None
 
     @staticmethod
-    def verify_refresh_token(token: str) -> tuple[bool, int | None]:
+    def verify_refresh_token(token: str, refresh_secret_key: str) -> tuple[bool, int | None]:
         """
         Verify refresh token signature and return embedded expiry epoch seconds.
 
@@ -108,13 +99,11 @@ class TokenUtil:
         """
         try:
             parts = token.split(".")
-            if len(parts) != 4:
-                return False, None
             random_part, company_id_str, exp_str, sig = parts
             if not exp_str.isdigit() or not company_id_str.isdigit():
                 return False, None
             payload = f"{random_part}.{company_id_str}.{exp_str}"
-            expected_sig = TokenUtil._sign_refresh(payload)
+            expected_sig = TokenUtil._sign_refresh(payload, refresh_secret_key)
             if not hmac.compare_digest(sig, expected_sig):
                 return False, None
             return True, int(exp_str)

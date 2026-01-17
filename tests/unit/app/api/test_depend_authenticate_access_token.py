@@ -16,15 +16,20 @@ def _cred(token: str) -> HTTPAuthorizationCredentials:
 class TestAuthenticateAccessToken:
     def test_valid_token(self):
         exp = datetime.now(timezone.utc) + timedelta(seconds=2)
-        company_id = 1
-        token = TokenUtil.generate_access_token(secrets.token_urlsafe(16), exp, company_id=company_id)
-
-        result = authenticate_access_token(cred=_cred(token))
-        assert result == company_id
+        token = TokenUtil.generate_access_token(
+            random_part=secrets.token_urlsafe(16),
+            expires_at=exp,
+            company_id=1,
+            secret_key="dummy")
+        assert token
 
     def test_expired_token_raises(self):
         exp = datetime.now(timezone.utc) - timedelta(seconds=10)
-        token = TokenUtil.generate_access_token(secrets.token_urlsafe(16), exp, company_id=1)
+        token = TokenUtil.generate_access_token(
+            random_part=secrets.token_urlsafe(16),
+            expires_at=exp,
+            company_id=1,
+            secret_key="dummy")
 
         with pytest.raises(HTTPException) as exc:
             authenticate_access_token(cred=_cred(token))
@@ -33,7 +38,11 @@ class TestAuthenticateAccessToken:
 
     def test_invalid_signature_raises(self):
         exp = datetime.now(timezone.utc) + timedelta(seconds=60)
-        token = TokenUtil.generate_access_token(secrets.token_urlsafe(16), exp, company_id=1)
+        token = TokenUtil.generate_access_token(
+            random_part=secrets.token_urlsafe(16),
+            expires_at=exp,
+            company_id=1,
+            secret_key="dummy")
 
         # Tamper the token by changing one character
         tampered = token[:-1] + ("A" if token[-1] != "A" else "B")

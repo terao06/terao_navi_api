@@ -4,8 +4,8 @@ from app.core.utils.credential_util import CredentialUtil
 from app.models.dynamodb.auth_client_model import AuthClientModel
 from app.core.utils.token_util import TokenUtil
 from datetime import datetime, timezone
-from app.core.utils.credential_util import CredentialUtil
 from app.core.logging import NaviApiLog
+from app.core.aws.secret_manager import SecretManager
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -53,7 +53,7 @@ def require_api_key(
 
 def authenticate_access_token(
     cred: HTTPAuthorizationCredentials = Depends(bearer),
-) -> str:
+) -> int:
     """
     Authorization ヘッダの Bearer トークン（短命アクセス用の access_token）を検証します。
 
@@ -62,7 +62,7 @@ def authenticate_access_token(
     ここでストレージ照会や失効チェックを行ってください。
 
     Returns:
-        str: 正常な場合は access_token を返却します。
+        int: 正常な場合は company_id を返却します。
 
     Raises:
         HTTPException: トークンが存在しない、形式が不正、その他検証に失敗した場合は 401 を返します。
@@ -72,8 +72,12 @@ def authenticate_access_token(
 
     token = cred.credentials
 
+    # Retrieve token secrets from Secrets Manager
+    token_settings = SecretManager().get_secret("token_setting")
+    access_secret = token_settings.get("access_token_secret") if isinstance(token_settings, dict) else None
+
     # Verify signature and extract expiry
-    is_valid, exp_epoch = TokenUtil.verify_access_token(token)
+    is_valid, exp_epoch = TokenUtil.verify_access_token(token, access_secret)
     if not is_valid or exp_epoch is None:
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
 
@@ -110,8 +114,12 @@ def authenticate_refresh_token(
 
     token = cred.credentials
 
+    # Retrieve token secrets from Secrets Manager
+    token_settings = SecretManager().get_secret("token_setting")
+    refresh_secret = token_settings.get("refresh_token_secret") if isinstance(token_settings, dict) else None
+
     # Verify signature and extract expiry
-    is_valid, exp_epoch = TokenUtil.verify_refresh_token(token)
+    is_valid, exp_epoch = TokenUtil.verify_refresh_token(token, refresh_secret)
     if not is_valid or exp_epoch is None:
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
 

@@ -1,3 +1,4 @@
+from app.core.aws.secret_manager import SecretManager
 from app.models.responses.access_token_response import AccessTokenResponse
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -5,11 +6,14 @@ from app.core.utils.token_util import TokenUtil
 
 
 class AuthService:
+    def __init__(self):
+        self.params = SecretManager().get_secret("token_setting")
+
     def get_auth_token(self, company_id: int | None = None) -> AccessTokenResponse:
-        ttl_seconds = 5 * 60
+        ttl_seconds = self.params.get("ttl_seconds")
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
 
-        refresh_ttl_seconds = 60 * 60
+        refresh_ttl_seconds = self.params.get("refresh_ttl_seconds")
         refresh_expires_at = datetime.now(timezone.utc) + timedelta(seconds=refresh_ttl_seconds)
 
         # Embed expiry and sign the token to enable verification without persistence
@@ -18,6 +22,7 @@ class AuthService:
             random_part=random_part,
             expires_at=expires_at,
             company_id=company_id,
+            secret_key=self.params.get("access_token_secret")
         )
         # Use signed refresh token with embedded company_id and expiry
         refresh_random = secrets.token_urlsafe(24)
@@ -25,6 +30,7 @@ class AuthService:
             random_part=refresh_random,
             expires_at=refresh_expires_at,
             company_id=company_id if company_id is not None else 0,
+            refresh_secret_key=self.params.get("refresh_token_secret")
         )
 
         return AccessTokenResponse(
@@ -41,20 +47,22 @@ class AuthService:
         Issue a new access token and rotated refresh token for an already authenticated company.
         No authentication or token verification is performed here.
         """
-        ttl_seconds = 5 * 60
+        ttl_seconds = self.params.get("ttl_seconds")
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
         access_token = TokenUtil.generate_access_token(
             random_part=secrets.token_urlsafe(24),
             expires_at=expires_at,
             company_id=company_id,
+            secret_key=self.params.get("access_token_secret")
         )
 
-        refresh_ttl_seconds = 60 * 60
+        refresh_ttl_seconds = self.params.get("refresh_ttl_seconds")
         refresh_expires_at = datetime.now(timezone.utc) + timedelta(seconds=refresh_ttl_seconds)
         refresh_token = TokenUtil.generate_refresh_token(
             random_part=secrets.token_urlsafe(24),
             expires_at=refresh_expires_at,
             company_id=company_id,
+            refresh_secret_key=self.params.get("refresh_token_secret")
         )
 
         return AccessTokenResponse(
