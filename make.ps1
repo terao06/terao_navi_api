@@ -14,9 +14,17 @@ $env:COMPOSE_DOCKER_CLI_BUILD = "1"
 switch ($Command) {
     "up" {
         Write-Host "🚀 BuildKitを有効化してコンテナを起動中..." -ForegroundColor Green
-        docker compose up --build
+        docker compose up
     }
     "up-d" {
+        Write-Host "🚀 BuildKitを有効化してコンテナをバックグラウンドで起動中..." -ForegroundColor Green
+        docker compose up -d
+    }
+    "up-build" {
+        Write-Host "🚀 BuildKitを有効化してコンテナを起動中..." -ForegroundColor Green
+        docker compose up --build
+    }
+    "up-d-build" {
         Write-Host "🚀 BuildKitを有効化してコンテナをバックグラウンドで起動中..." -ForegroundColor Green
         docker compose up -d --build
     }

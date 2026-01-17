@@ -10,10 +10,20 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 ## up: コンテナを起動（フォアグラウンド）
 up:
 	@echo "🚀 BuildKitを有効化してコンテナを起動中..."
+	docker compose up
+
+## up-d: コンテナを起動（ビルド + バックグラウンド）
+up-d:
+	@echo "🚀 BuildKitを有効化してコンテナをバックグラウンドで起動中..."
+	docker compose up -d
+
+## up-build: コンテナを起動（ビルド + フォアグラウンド）
+up-build:
+	@echo "🚀 BuildKitを有効化してコンテナを起動中..."
 	docker compose up --build
 
 ## up-d: コンテナを起動（バックグラウンド）
-up-d:
+up--build-d:
 	@echo "🚀 BuildKitを有効化してコンテナをバックグラウンドで起動中..."
 	docker compose up -d --build
 

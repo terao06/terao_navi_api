@@ -96,17 +96,8 @@ if [[ "${EXISTING_COUNT}" != "0" ]]; then
 else
   echo "[init] 認証クライアントの初期データを投入中... company_id=${AUTH_COMPANY_ID} name=${AUTH_CLIENT_NAME}"
 
-  # credential.pyを使用して生成
-  CRED_OUTPUT=$(PYTHONPATH=/work python3 -c "
-import sys
-try:
-    from app.core.utils.credential_util import CredentialUtil
-    cid, csec, chash = CredentialUtil.generate_client_credential()
-    print(f'{cid} {csec} {chash}')
-except Exception as e:
-    print(e, file=sys.stderr)
-    sys.exit(1)
-")
+  # create_credential.py を使用して生成
+  CRED_OUTPUT=$(PYTHONPATH=/work python3 /init/create_credential.py)
   read -r CLIENT_ID CLIENT_SECRET SECRET_HASH <<< "${CRED_OUTPUT}"
 
   # タイムスタンプ
@@ -127,12 +118,15 @@ except Exception as e:
   
   # ファイル書き出し
   OUTPUT_FILE="/output/test_credential.txt"
+  # generate_basic_credential を使用して Basic 認証文字列を作成
+  BASIC_CREDENTIAL="$(PYTHONPATH=/work python3 -c "from app.core.utils.credential_util import CredentialUtil; print(CredentialUtil.encode_basic_credential('${CLIENT_ID}', '${CLIENT_SECRET}'))")"
   {
-      echo "client_id=${CLIENT_ID}"
-      echo "client_secret=${CLIENT_SECRET}"
+    echo "client_id=${CLIENT_ID}"
+    echo "client_secret=${CLIENT_SECRET}"
+    echo "basic_credential=${BASIC_CREDENTIAL}"
   } > "${OUTPUT_FILE}"
 
-  echo "[init] 認証情報をlocal_data/dynamodb_init/test_credential.txtに保存しました"
+  echo "[init] 認証情報をlocal_data/credential/test_credential.txtに保存しました"
 fi
 
 echo "[init] 完了しました。"

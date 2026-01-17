@@ -1,23 +1,33 @@
 from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
 from app.core.utils.credential_util import CredentialUtil
 from app.models.dynamodb.auth_client_model import AuthClientModel
 from app.core.utils.token_util import TokenUtil
 from datetime import datetime, timezone
+from app.core.utils.credential_util import CredentialUtil
+from app.core.logging import NaviApiLog
 
 
 bearer = HTTPBearer(auto_error=False)
+basic = HTTPBasic(auto_error=False)
 
 
 def require_api_key(
-    cred: HTTPAuthorizationCredentials = Depends(bearer),
+    cred: HTTPBasicCredentials = Depends(basic),
 ) -> AuthClientModel:
     if cred is None:
+        NaviApiLog.warning(
+            "認証情報が存在しません。"
+        )
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
 
     try:
-        client_id, client_secret = cred.credentials.split(":", 1)
+        client_id = cred.username
+        client_secret = cred.password
     except ValueError:
+        NaviApiLog.warning(
+            "クレデンシャルの取得に失敗しました。"
+        )
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
 
     secret_hash = CredentialUtil.decrypt_client_credential(client_secret=client_secret)
@@ -25,12 +35,17 @@ def require_api_key(
     try:
         client = AuthClientModel.get(client_id)
     except AuthClientModel.DoesNotExist:
+        NaviApiLog.warning(
+            f"認証情報が存在しません: client_id={client_id}"
+        )
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
 
     if client.secret_hash != secret_hash:
+        NaviApiLog.warning("hash値が一致しません。")
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
 
     if client.is_active != True:
+        NaviApiLog.warning(f"対象の認証情報は使用できません。 client_id={client_id}")
         raise HTTPException(status_code=403, detail="認証に失敗しました。")
 
     return client
@@ -69,7 +84,7 @@ def authenticate_access_token(
     company_id = TokenUtil.extract_company_id(token)
     if company_id is None:
         # company_id がトークンに含まれていない場合は認証エラー
-        raise HTTPException(status_code=401, detail="認証に失敗しました（company_id がトークンに含まれていません）。")
+        raise HTTPException(status_code=401, detail="認証に失敗しました。")
 
     return company_id
 
