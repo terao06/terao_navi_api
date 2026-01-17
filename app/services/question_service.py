@@ -6,8 +6,8 @@ from app.helpers.question_llm_helper import QuestionLLMHelper
 from sqlalchemy.orm import Session
 from app.core.logging import NaviApiLog
 
-
 COMMON_PATH = "manuals"
+
 
 class QuestionService:
     @transaction
