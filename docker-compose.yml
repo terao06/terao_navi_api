@@ -63,6 +63,12 @@ services:
         condition: service_started
       navi-api-dynamodb:
         condition: service_started
+      ssm-seed:
+        condition: service_completed_successfully
+      secret-seed:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     networks:
       - navi-api-network
     restart: unless-stopped

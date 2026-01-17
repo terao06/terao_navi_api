@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api.endpoints.question import question_router
+from app.api.endpoints.auth_token import token_router
 from app.core.logging import NaviApiLog
 
 # ロギング初期設定
@@ -10,4 +11,5 @@ NaviApiLog.setup(
 
 app = FastAPI()
 
+app.include_router(token_router)
 app.include_router(question_router)

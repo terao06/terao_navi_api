@@ -330,32 +330,51 @@ FastAPIの自動生成されたAPIドキュメント（Swagger UI）が表示さ
 
 ### 3. API呼び出しテスト
 
-認証情報を使用してAPIをテストします：
+APIは「トークン発行 → API呼び出し」の2ステップでアクセスします。
+
+1) トークン発行（/auth/token）
+- Authorization: `Bearer client_id:client_secret`
+- レスポンスに `access_token` と `refresh_token` が含まれます
+
+2) 質問API呼び出し（/ask）
+- Authorization: `Bearer <access_token>`
+- リクエストボディは `question`（必須）と `application_id`（任意）
 
 ```powershell
-# 認証情報を読み込む
+# 認証情報を読み込む（client_id / client_secret）
 $credential = Get-Content local_data\credential\test_credential.txt
 $clientId = ($credential | Select-String "client_id=(.+)").Matches.Groups[1].Value
 $clientSecret = ($credential | Select-String "client_secret=(.+)").Matches.Groups[1].Value
 
-# Bearerトークンを作成（client_id:client_secret形式）
-$token = "${clientId}:${clientSecret}"
-
-# APIリクエストの例（エンドポイントに応じて変更してください）
-$headers = @{
-    "Authorization" = "Bearer $token"
+# 1) トークン発行: Authorization = Bearer client_id:client_secret
+$apiKeyToken = "${clientId}:${clientSecret}"
+$authHeaders = @{
+    "Authorization" = "Bearer $apiKeyToken"
     "Content-Type" = "application/json"
 }
+$tokenResp = Invoke-RestMethod -Uri http://localhost:8005/auth/token -Method POST -Headers $authHeaders
+$accessToken = $tokenResp.data.access_token
+$refreshToken = $tokenResp.data.refresh_token
 
-Invoke-WebRequest -Uri http://localhost:8005/api/v1/question -Method POST -Headers $headers -Body '{"question": "テスト質問"}'
+# 2) 質問APIを呼び出す: Authorization = Bearer <access_token>
+$questionBody = @{ question = "テスト質問"; application_id = 1 } | ConvertTo-Json -Depth 3
+$apiHeaders = @{
+    "Authorization" = "Bearer $accessToken"
+    "Content-Type" = "application/json"
+}
+Invoke-RestMethod -Uri http://localhost:8005/ask -Method POST -Headers $apiHeaders -Body $questionBody
+
+# （任意）3) トークンの更新: Authorization = Bearer <refresh_token>
+$refreshHeaders = @{
+    "Authorization" = "Bearer $refreshToken"
+    "Content-Type" = "application/json"
+}
+$refreshResp = Invoke-RestMethod -Uri http://localhost:8005/auth/refresh -Method POST -Headers $refreshHeaders
 ```
 
-**認証方式**: `Authorization: Bearer client_id:client_secret`
-
-例:
-```
-Authorization: Bearer adb83002d4d9a6e362df4bf6b899db7c:f53e8aa23f072d5367915ebcea2bc3cd099968c354662ecc9bd03bc950a26ce0
-```
+認証方式のまとめ:
+- トークン発行時: `Authorization: Bearer client_id:client_secret`
+- API呼び出し時: `Authorization: Bearer <access_token>`
 
 ## 停止と再起動
 
