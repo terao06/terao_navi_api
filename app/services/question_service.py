@@ -38,6 +38,8 @@ class QuestionService:
             file_paths.append(
                 f"{COMMON_PATH}/{manual.application_id}/{manual.manual_id}.{manual.file_extension}"
             )
+        NaviApiLog.info(f"s3ファイルパスリスト={file_paths}")
+
         answer = QuestionLLMHelper(
             file_paths=file_paths,collection_name=COMMON_PATH
         ).answer_question(question_text=question_request.question)
