@@ -26,7 +26,6 @@ def read_root(
 @request_rapper()
 def refresh_token(company_id: int = Depends(authenticate_refresh_token)):
     """
-    リフレッシュトークンを検証し（Depends）、認証済みの company_id のもとで
     新しいアクセストークンとリフレッシュトークンを発行します。
     """
     return AuthService().refresh_auth_token(company_id=company_id)

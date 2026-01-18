@@ -6,9 +6,29 @@ info:
     
     ## 認証方式
     
-    このAPIは Bearer Token認証を使用します。
-    - トークン形式: `client_id:client_secret`
-    - ヘッダー: `Authorization: Bearer {client_id}:{client_secret}`
+    このAPIは2段階の認証方式を採用しています：
+    
+    ### 1. トークン発行（`/auth/token`）
+    - **Basic認証**を使用してクライアント認証
+    - Username: `client_id`
+    - Password: `client_secret`
+    - ヘッダー: `Authorization: Basic {Base64(client_id:client_secret)}`
+    
+    ### 2. API呼び出し（`/ask`など）
+    - **Bearer Token認証**を使用
+    - トークン: `/auth/token`で取得した`access_token`
+    - ヘッダー: `Authorization: Bearer {access_token}`
+    
+    ### 3. トークン更新（`/auth/refresh`）
+    - **Bearer Token認証**を使用
+    - トークン: `/auth/token`で取得した`refresh_token`
+    - ヘッダー: `Authorization: Bearer {refresh_token}`
+    
+    ## 認証フロー
+    
+    1. `/auth/token`でBasic認証により`access_token`と`refresh_token`を取得
+    2. 取得した`access_token`を使用してAPI（`/ask`など）を呼び出し
+    3. `access_token`の有効期限が切れたら、`refresh_token`を使用して`/auth/refresh`で新しいトークンペアを取得
     
     ## 初期データ
     
@@ -29,10 +49,189 @@ servers:
     description: 本番環境
 
 tags:
+  - name: Authentication
+    description: 認証・トークン管理に関するエンドポイント
   - name: Question
     description: 質問応答に関するエンドポイント
 
 paths:
+  /auth/token:
+    post:
+      tags:
+        - Authentication
+      summary: アクセストークンとリフレッシュトークンを発行
+      description: |
+        Basic認証を使用してクライアント認証を行い、アクセストークンとリフレッシュトークンを発行します。
+        
+        ### 認証方式
+        - **Basic認証（HTTPBasicCredentials）**を使用
+        - **Username**: `client_id`（例: `adb83002d4d9a6e36...`）
+        - **Password**: `client_secret`（例: `f53e8aa23f072d53...`）
+        
+        ### 処理フロー
+        1. Basic認証ヘッダーから`client_id`と`client_secret`を取得
+        2. `client_secret`を復号化してハッシュ値を生成
+        3. DynamoDBから`client_id`に紐づく認証情報を取得
+        4. ハッシュ値とis_activeフラグを検証
+        5. 検証成功後、アクセストークン（短命）とリフレッシュトークン（長命）を生成
+        6. 両方のトークンと有効期限情報を返却
+        
+      operationId: issueToken
+      security:
+        - basicAuth: []
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+            example: "Basic YWRiODMwMDJkN..."
+          description: |
+            Basic認証ヘッダー
+            
+            形式: `Basic {Base64(client_id:client_secret)}`
+            
+            例:
+            - client_id: `adb83002d4d9a6e36...`
+            - client_secret: `f53e8aa23f072d53...`
+            - Base64エンコード: `YWRiODMwMDJkN...`
+      responses:
+        '200':
+          description: トークン発行成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              examples:
+                success:
+                  summary: 成功時のレスポンス
+                  value:
+                    status: "success"
+                    data:
+                      access_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                      expires_at: "2026-01-18T12:30:00Z"
+                      ttl_seconds: 3600
+                      refresh_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                      refresh_expires_at: "2026-02-17T11:30:00Z"
+                      refresh_ttl_seconds: 2592000
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: 認証失敗
+                  value:
+                    status: "error"
+                    message: "認証に失敗しました。"
+                    error_code: "UNAUTHORIZED"
+        '403':
+          description: アクセス拒否（無効化されたクライアント）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                forbidden:
+                  summary: クライアントが無効化されている
+                  value:
+                    status: "error"
+                    message: "認証に失敗しました。"
+                    error_code: "FORBIDDEN"
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: リフレッシュトークンを使用して新しいトークンペアを発行
+      description: |
+        リフレッシュトークンを使用して、新しいアクセストークンとリフレッシュトークンのペアを発行します。
+        
+        ### 認証方式
+        - Bearer Token認証を使用
+        - トークン: refresh_token（/auth/tokenで取得したもの）
+        
+        ### 処理フロー
+        1. リフレッシュトークンの署名と有効期限を検証
+        2. トークンからcompany_idを抽出
+        3. 新しいアクセストークンとリフレッシュトークンを生成（トークンローテーション）
+        4. 両方のトークンと有効期限情報を返却
+        
+        ### セキュリティ
+        - リフレッシュトークンは使用後に新しいものに置き換えられます（トークンローテーション）
+        - 古いリフレッシュトークンは使用できなくなります
+        
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+            example: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyYW5kb20iOiJhYmMxMjMiLCJleHAiOjE3MDUzMjAwMDAsImNvbXBhbnlfaWQiOjF9.signature"
+          description: |
+            Bearer Token認証ヘッダー（リフレッシュトークン）
+            
+            形式: `Bearer {refresh_token}`
+            
+            `/auth/token`エンドポイントで取得した`refresh_token`を使用してください。
+            
+            例: `Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...`
+      responses:
+        '200':
+          description: トークン更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              examples:
+                success:
+                  summary: 成功時のレスポンス
+                  value:
+                    status: "success"
+                    data:
+                      access_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                      expires_at: "2026-01-18T12:30:00Z"
+                      ttl_seconds: 3600
+                      refresh_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                      refresh_expires_at: "2026-02-17T11:30:00Z"
+                      refresh_ttl_seconds: 2592000
+        '401':
+          description: 認証エラー（無効なトークンまたは有効期限切れ）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_token:
+                  summary: 無効なトークン
+                  value:
+                    status: "error"
+                    message: "認証に失敗しました。"
+                    error_code: "UNAUTHORIZED"
+                expired_token:
+                  summary: 有効期限切れ
+                  value:
+                    status: "error"
+                    message: "トークンの有効期限が切れています。"
+                    error_code: "TOKEN_EXPIRED"
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /ask:
     post:
       tags:
@@ -50,6 +249,21 @@ paths:
       operationId: askQuestion
       security:
         - bearerAuth: []
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+            example: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyYW5kb20iOiJhYmMxMjMiLCJleHAiOjE3MDUzMjAwMDAsImNvbXBhbnlfaWQiOjF9.signature"
+          description: |
+            Bearer Token認証ヘッダー（アクセストークン）
+            
+            形式: `Bearer {access_token}`
+            
+            `/auth/token`エンドポイントで取得した`access_token`を使用してください。
+            
+            例: `Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...`
       requestBody:
         required: true
         content:
@@ -145,18 +359,93 @@ paths:
 
 components:
   securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        Basic認証（HTTPBasicCredentials）
+        
+        **形式**: `Authorization: Basic {Base64(client_id:client_secret)}`
+        
+        **認証情報**:
+        - Username（ユーザー名）: `client_id`
+        - Password（パスワード）: `client_secret`
+        
+        **例**:
+        - client_id: `adb83002d4d9a6e36...`
+        - client_secret: `f53e8aa23f072d53...`
+        - エンコード後: `Authorization: Basic YWRiODMwMDJkN...`
+        
+        **検証プロセス**:
+        1. Basic認証ヘッダーから`client_id`と`client_secret`を抽出
+        2. `client_secret`を復号化してハッシュ値を生成（CredentialUtil.decrypt_client_credential）
+        3. DynamoDBから`client_id`に対応する認証クライアント情報を取得
+        4. 保存されたハッシュ値と照合
+        5. `is_active`フラグが`true`であることを確認
+        
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: "client_id:client_secret"
+      bearerFormat: JWT
       description: |
         Bearer Token認証
         
-        形式: `Authorization: Bearer {client_id}:{client_secret}`
+        形式: `Authorization: Bearer {token}`
         
-        例: `Authorization: Bearer adb83002d4d9a6e362df4bf6b899db7c:f53e8aa23f072d5367915ebcea2bc3cd099968c354662ecc9bd03bc950a26ce0`
+        `/ask`エンドポイントではaccess_tokenを使用します。
+        `/auth/refresh`エンドポイントではrefresh_tokenを使用します。
+        
+        例: `Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...`
 
   schemas:
+    TokenResponse:
+      type: object
+      required:
+        - status
+        - data
+      properties:
+        status:
+          type: string
+          description: レスポンスステータス
+          enum: [success]
+          example: "success"
+        data:
+          type: object
+          required:
+            - access_token
+            - expires_at
+            - ttl_seconds
+            - refresh_token
+            - refresh_expires_at
+            - refresh_ttl_seconds
+          properties:
+            access_token:
+              type: string
+              description: 短命アクセス用のトークン（API呼び出しに使用）
+              example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+            expires_at:
+              type: string
+              format: date-time
+              description: アクセストークンの有効期限 (UTC)
+              example: "2026-01-18T12:30:00Z"
+            ttl_seconds:
+              type: integer
+              description: アクセストークンの有効時間（秒）
+              example: 3600
+            refresh_token:
+              type: string
+              description: アクセストークン更新用のリフレッシュトークン
+              example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+            refresh_expires_at:
+              type: string
+              format: date-time
+              description: リフレッシュトークンの有効期限 (UTC)
+              example: "2026-02-17T11:30:00Z"
+            refresh_ttl_seconds:
+              type: integer
+              description: リフレッシュトークンの有効時間（秒）
+              example: 2592000
+
     QuestionRequest:
       type: object
       required:

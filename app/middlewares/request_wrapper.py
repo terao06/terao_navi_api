@@ -28,7 +28,6 @@ def request_rapper():
         def wrapper(*args, **kwargs):
             func_name = func.__name__
             NaviApiLog.info(f"Function: {func_name}")
-            
             # Pydanticモデルや基本型のパラメータをログ出力
             log_params = {}
             for key, value in kwargs.items():

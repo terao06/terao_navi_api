@@ -109,6 +109,7 @@ else
       \"client_id\":     {\"S\": \"${CLIENT_ID}\"},
       \"company_id\":    {\"N\": \"${AUTH_COMPANY_ID}\"},
       \"secret_hash\":   {\"S\": \"${SECRET_HASH}\"},
+      \"home_page\":   {\"S\": \"https://localhost:3000\"},
       \"is_active\":     {\"N\": \"1\"},
       \"created_at\":    {\"S\": \"${CREATED_AT}\"}
     }" \

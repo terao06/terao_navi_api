@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
 from app.core.utils.credential_util import CredentialUtil
 from app.models.dynamodb.auth_client_model import AuthClientModel
@@ -13,8 +13,12 @@ basic = HTTPBasic(auto_error=False)
 
 
 def require_api_key(
+    request: Request,
     cred: HTTPBasicCredentials = Depends(basic),
 ) -> AuthClientModel:
+
+    origin = request.headers.get("X-Origin", None)
+
     if cred is None:
         NaviApiLog.warning(
             "認証情報が存在しません。"
@@ -47,6 +51,12 @@ def require_api_key(
     if client.is_active != True:
         NaviApiLog.warning(f"対象の認証情報は使用できません。 client_id={client_id}")
         raise HTTPException(status_code=403, detail="認証に失敗しました。")
+    if client.home_page != origin:
+        NaviApiLog.warning(f"ホームページが一致しません。 "
+                           f"client_id={client_id} "
+                           f"home_page={client.home_page}")
+
+        raise HTTPException(status_code=403, detail="認証に失敗しました。")
 
     return client
 
@@ -59,7 +69,7 @@ def authenticate_access_token(
 
     現在の実装では、トークンの形式（URL セーフ文字で構成）と存在のみを検証します。
     追加の永続化や失効管理（例: DynamoDB/Redis に保存して TTL/ワンタイム消費を検証）を導入する場合は、
-    ここでストレージ照会や失効チェックを行ってください。
+    DBにトークンを保存しそれと比較する使用を入れて過去のトークンを使えないようにする必要あり。
 
     Returns:
         int: 正常な場合は company_id を返却します。
@@ -72,11 +82,9 @@ def authenticate_access_token(
 
     token = cred.credentials
 
-    # Retrieve token secrets from Secrets Manager
     token_settings = SecretManager().get_secret("token_setting")
     access_secret = token_settings.get("access_token_secret") if isinstance(token_settings, dict) else None
 
-    # Verify signature and extract expiry
     is_valid, exp_epoch = TokenUtil.verify_access_token(token, access_secret)
     if not is_valid or exp_epoch is None:
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
@@ -114,11 +122,9 @@ def authenticate_refresh_token(
 
     token = cred.credentials
 
-    # Retrieve token secrets from Secrets Manager
     token_settings = SecretManager().get_secret("token_setting")
-    refresh_secret = token_settings.get("refresh_token_secret") if isinstance(token_settings, dict) else None
+    refresh_secret = token_settings.get("refresh_token_secret", None)
 
-    # Verify signature and extract expiry
     is_valid, exp_epoch = TokenUtil.verify_refresh_token(token, refresh_secret)
     if not is_valid or exp_epoch is None:
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
@@ -129,7 +135,6 @@ def authenticate_refresh_token(
 
     company_id = TokenUtil.extract_company_id(token)
     if company_id is None:
-        # company_id がトークンに含まれていない場合は認証エラー
         raise HTTPException(status_code=401, detail="認証に失敗しました（company_id がトークンに含まれていません）。")
 
     return company_id

@@ -16,7 +16,6 @@ class AuthService:
         refresh_ttl_seconds = self.params.get("refresh_ttl_seconds")
         refresh_expires_at = datetime.now(timezone.utc) + timedelta(seconds=refresh_ttl_seconds)
 
-        # Embed expiry and sign the token to enable verification without persistence
         random_part = secrets.token_urlsafe(24)
         access_token = TokenUtil.generate_access_token(
             random_part=random_part,
@@ -24,7 +23,7 @@ class AuthService:
             company_id=company_id,
             secret_key=self.params.get("access_token_secret")
         )
-        # Use signed refresh token with embedded company_id and expiry
+
         refresh_random = secrets.token_urlsafe(24)
         refresh_token = TokenUtil.generate_refresh_token(
             random_part=refresh_random,
@@ -43,10 +42,6 @@ class AuthService:
         )
 
     def refresh_auth_token(self, company_id: int) -> AccessTokenResponse:
-        """
-        Issue a new access token and rotated refresh token for an already authenticated company.
-        No authentication or token verification is performed here.
-        """
         ttl_seconds = self.params.get("ttl_seconds")
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
         access_token = TokenUtil.generate_access_token(

@@ -1,4 +1,3 @@
-from enum import Enum
 import os
 
 from pynamodb.models import Model
@@ -36,4 +35,5 @@ class AuthClientModel(Model):
     secret_hash = UnicodeAttribute(null=False)
     is_active = NumberAttribute(default=1)
     created_at = UnicodeAttribute(null=False)
+    home_page = UnicodeAttribute(null=False)
     idx_company_id = CompanyIdIndex()
