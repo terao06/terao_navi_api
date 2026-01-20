@@ -1,0 +1,284 @@
+services:
+  navi-api-db:
+    image: navi-api-db:local
+    container_name: navi-api-db
+    build:
+      context: .
+      dockerfile: ./local_setting/local_mysql/Dockerfile
+    command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - 3306:3306
+    volumes:
+      - ./local_data/mysql:/var/lib/mysql
+      - ./local_setting/local_mysql/migrations:/app/local_setting/local_mysql/migrations
+      - ./local_setting/local_mysql/run_migrations.py:/docker-entrypoint-initdb.d/99-run-migrations.py
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=db_local
+      - MYSQL_USER=navi_admin_user
+      - MYSQL_PASSWORD=password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - navi-api-network
+
+  navi-api-app:
+    image: navi-api-app:local
+    container_name: navi-api-app
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: ./docker/local/Dockerfile
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        while ! nc -z navi-api-db 3306; do
+          sleep 1
+        done &&
+        echo 'Database is ready!' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8005 --reload --reload-dir app
+      "
+    volumes:
+      - .:/app
+      - ./local_setting/local_app/llm_models:/models:ro
+    ports:
+      - 8005:8005
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - AWS_REGION=ap-northeast-1
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy123
+      - DDB_ENDPOINT=http://navi-api-dynamodb:8000
+      - SECRETS_MANAGER_ENDPOINT=http://localstack:4566
+      - S3_ENDPOINT=http://navi-api-s3:9000
+      - SSM_ENDPOINT=http://localstack:4566
+    depends_on:
+      navi-api-db:
+        condition: service_healthy
+      navi-api-s3:
+        condition: service_started
+      navi-api-dynamodb:
+        condition: service_started
+      ssm-seed:
+        condition: service_completed_successfully
+      secret-seed:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - navi-api-network
+    restart: unless-stopped
+
+  navi-api-s3:
+    image: minio/minio
+    container_name: navi-api-s3
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - ./local_data/minio:/data
+    environment:
+      - MINIO_ROOT_USER=dummy
+      - MINIO_ROOT_PASSWORD=dummy123
+    command: server /data --console-address ":9001"
+    networks:
+      - navi-api-network
+    restart: always
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - navi-api-s3
+    entrypoint: >
+      sh -c "/init/create_bucket.sh"
+    volumes:
+      - ./local_setting/local_s3:/init
+    networks:
+      - navi-api-network
+
+  navi-api-phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: navi-api-phpmyadmin
+    ports:
+      - "8014:80"
+    environment:
+      PMA_HOST: navi-api-db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: rootpassword
+    networks:
+      - navi-api-network
+    depends_on:
+      navi-api-db:
+        condition: service_healthy
+    restart: always
+
+  navi-api-dynamodb:
+    image: amazon/dynamodb-local:latest
+    container_name: navi-api-dynamodb
+    ports:
+      - "8012:8000"
+    command: ["-jar","DynamoDBLocal.jar","-sharedDb", "-dbPath", "/home/dynamodblocal/data"]
+    volumes:
+      - ./local_data/dynamodb:/home/dynamodblocal/data
+    networks:
+      - navi-api-network
+
+  navi-api-dynamodb-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - navi-api-dynamodb
+    environment:
+      - AWS_REGION=ap-northeast-1
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy123
+      - DDB_ENDPOINT=http://navi-api-dynamodb:8000
+      - DDB_TABLE_PREFIX=
+    volumes:
+      - ./local_setting/local_dynamo/init:/init:ro
+      - .:/work:ro
+      - ./local_data/credential:/output
+    entrypoint: ["/bin/sh", "-c", "sleep 10 && /init/create_tables.sh"]
+    networks:
+      - navi-api-network
+
+  navi-api-dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    container_name: navi-api-dynamodb-admin
+    ports:
+      - "8015:8001"
+    environment:
+      - DYNAMO_ENDPOINT=http://navi-api-dynamodb:8000
+      - AWS_REGION=ap-northeast-1
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+    depends_on:
+      - navi-api-dynamodb
+    networks:
+      - navi-api-network
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: navi-api-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=ssm,secretsmanager
+      - DEFAULT_REGION=ap-northeast-1
+      - LOG_LEVEL=WARNING
+      - LS_LOG=warning
+    volumes:
+      - ./local_data/localstack:/var/lib/localstack
+    networks:
+      - navi-api-network
+
+  ssm-seed:
+    image: amazon/aws-cli:latest
+    container_name: navi-api-ssm-seed
+    depends_on:
+      - localstack
+    volumes:
+      - ./local_setting/local_ssm:/init
+    entrypoint: ["/bin/sh", "/init/create_ssm.sh"]
+    environment:
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy123
+      - AWS_DEFAULT_REGION=ap-northeast-1
+    networks:
+      - navi-api-network
+
+  secret-seed:
+    image: amazon/aws-cli:latest
+    container_name: navi-api-secret-seed
+    depends_on:
+      - localstack
+    volumes:
+      - ./local_setting/local_secret:/init
+    entrypoint: ["/bin/sh", "/init/create_secret.sh"]
+    environment:
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy123
+      - AWS_DEFAULT_REGION=ap-northeast-1
+    networks:
+      - navi-api-network
+
+  vector-db:
+    image: pgvector/pgvector:pg16
+    container_name: vector-db
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=vector_user
+      - POSTGRES_PASSWORD=vector_password
+      - POSTGRES_DB=vector_db
+    volumes:
+      - ./local_data/vector_db:/var/lib/postgresql/data
+      - ./local_setting/local_postgre/create_tables.sh:/docker-entrypoint-initdb.d/init.sh
+    networks:
+      - navi-api-network
+
+  vector-seed:
+    build:
+      context: .
+      dockerfile: ./docker/local/Dockerfile
+    container_name: navi-api-vector-seed
+    depends_on:
+      navi-api-db:
+        condition: service_healthy
+      navi-api-s3:
+        condition: service_started
+      vector-db:
+        condition: service_started
+      ssm-seed:
+        condition: service_completed_successfully
+      secret-seed:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - .:/app
+      - ./local_setting/local_app:/init_app
+      - ./local_setting/local_app/llm_models:/models:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - AWS_REGION=ap-northeast-1
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy123
+      - S3_ENDPOINT=http://navi-api-s3:9000
+      - SSM_ENDPOINT=http://localstack:4566
+      - SECRETS_MANAGER_ENDPOINT=http://localstack:4566
+    networks:
+      - navi-api-network
+    command: >
+      sh -c "
+        echo 'Waiting for services...' &&
+        sleep 15 &&
+        python /init_app/init_vectors.py
+      "
+
+  vector-db-admin:
+    image: dpage/pgadmin4
+    container_name: vector-db-admin
+    ports:
+      - "8080:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    volumes:
+      - ./local_data/pgadmin:/var/lib/pgadmin
+    networks:
+      - navi-api-network
+    depends_on:
+      - vector-db
+
+networks:
+  navi-api-network:
+    driver: bridge
+
+volumes:
+  minio_data:

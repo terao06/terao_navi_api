@@ -1,0 +1,6 @@
+{
+    "access_token_secret": "test_access_token_secret",
+    "refresh_token_secret": "test_refresh_token_secret",
+    "ttl_seconds": 300,
+    "refresh_ttl_seconds": 3600
+}

@@ -1,0 +1,7 @@
+{
+    "user": "vector_user",
+    "password": "vector_password",
+    "host": "vector-db",
+    "port": 5432,
+    "database": "vector_db"
+}
