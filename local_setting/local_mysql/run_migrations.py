@@ -89,7 +89,7 @@ def insert_initial_data():
         {'role_id': 3, 'name': '閲覧権限', 'description': 'データの閲覧のみ可能'},
     ]
     companies = [
-        {"company_id": 1, "name": "株式会社A", "address": "岩戸南4-3-6", "tel": "080-1111-1111", "is_deleted": 0}
+        {"company_id": 1, "name": "株式会社A", "address": "岩戸南4-3-6", "tel": "080-1111-1111", "home_page": "http://localhost:3000", "is_deleted": 0}
     ]
 
     users = [
@@ -146,6 +146,7 @@ def insert_initial_data():
                 'name': company_data['name'],
                 'address': company_data['address'],
                 'tel': company_data['tel'],
+                'home_page': company_data['home_page'],
                 'is_deleted': company_data['is_deleted']
             }
         )

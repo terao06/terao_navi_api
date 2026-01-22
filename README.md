@@ -246,9 +246,10 @@ LLM_API_KEY=your_llm_api_key
 
 クライアント認証情報を使ってアクセストークンを取得します。
 
-**リクエスト（Basic認証）:**
+**リクエスト（カスタムヘッダー認証）:**
 ```
-Authorization: Basic BASE64(client_id:client_secret)
+X-Origin: https://your-website.com
+X-Company-Id: 1
 ```
 
 **レスポンス:**
@@ -360,10 +361,11 @@ sequenceDiagram
     participant Auth as 認証サービス
     participant DB as データベース
     
-    Client->>API: POST /auth/token (Basic認証)
+    Client->>API: POST /auth/token (X-Origin, X-Company-Id)
     API->>Auth: 認証情報を検証
-    Auth->>DB: クライアント情報を確認
-    DB-->>Auth: クライアント情報
+    Auth->>DB: 企業情報を確認
+    DB-->>Auth: 企業情報（home_page）
+    Auth->>Auth: Originとホームページを照合
     Auth-->>API: トークン生成
     API-->>Client: access_token + refresh_token
     
@@ -385,11 +387,12 @@ sequenceDiagram
 
 ### セキュリティのベストプラクティス
 
-1. **Origin/Refererチェック**: 許可されたドメインからのみアクセス可能に設定
-2. **レート制限**: 過度なリクエストを防ぐ
-3. **トークン有効期限**: アクセストークンは短め（30分）、リフレッシュトークンは長め（7日）
-4. **HTTPS必須**: 本番環境では必ずHTTPSを使用
-5. **シークレットローテーション**: 定期的にclient_secretを更新
+1. **Originチェック**: X-Originヘッダーで企業のホームページと照合し、許可されたドメインからのみアクセス可能
+2. **企業ID検証**: X-Company-Idヘッダーでデータベース上の企業情報と照合
+3. **レート制限**: 過度なリクエストを防ぐ
+4. **トークン有効期限**: アクセストークンは短め（30分）、リフレッシュトークンは長め（7日）
+5. **HTTPS必須**: 本番環境では必ずHTTPSを使用
+6. **ホームページ登録管理**: データベースに登録された企業のホームページのみアクセス許可
 
 ## 開発
 

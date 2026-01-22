@@ -1,64 +1,63 @@
 from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
-from app.core.utils.credential_util import CredentialUtil
-from app.models.dynamodb.auth_client_model import AuthClientModel
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.utils.token_util import TokenUtil
 from datetime import datetime, timezone
 from app.core.logging import NaviApiLog
 from app.core.aws.secret_manager import SecretManager
-
+from sqlalchemy.orm import Session
+from app.repositories.company_repository import CompanyRepository
+from app.core.logging import NaviApiLog
+from app.models.mysql.company_model import CompanyModel
+from app.core.database.mysql import MySQLDatabase
 
 bearer = HTTPBearer(auto_error=False)
-basic = HTTPBasic(auto_error=False)
+
+
+def get_db_session():
+    """
+    FastAPI用のデータベースセッション依存関係
+    """
+    db = MySQLDatabase()
+    with db.get_session() as session:
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
 
 
 def require_api_key(
     request: Request,
-    cred: HTTPBasicCredentials = Depends(basic),
-) -> AuthClientModel:
-
+    session: Session = Depends(get_db_session)
+) -> int:
     origin = request.headers.get("X-Origin", None)
-
-    if cred is None:
+    company_id = request.headers.get("X-Company-Id", None)
+    if not origin or not company_id:
         NaviApiLog.warning(
-            "認証情報が存在しません。"
+            f"認証情報が存在しません。"
+            f"origin={origin} "
+            f"company_id={company_id}"
         )
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
-
-    try:
-        client_id = cred.username
-        client_secret = cred.password
-    except ValueError:
+    
+    company = CompanyRepository.get_by_company_id(session=session, company_id=company_id)
+    if not company:
         NaviApiLog.warning(
-            "クレデンシャルの取得に失敗しました。"
+            f"企業情報が存在しません。"
+            f"origin={origin} "
+            f"company_id={company_id}"
         )
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
-
-    secret_hash = CredentialUtil.decrypt_client_credential(client_secret=client_secret)
-
-    try:
-        client = AuthClientModel.get(client_id)
-    except AuthClientModel.DoesNotExist:
+    if origin != company.home_page:
         NaviApiLog.warning(
-            f"認証情報が存在しません: client_id={client_id}"
+            f"ホームページが一致しません。"
+            f"home_page={company.home_page} "
+            f"origin={origin}"
         )
         raise HTTPException(status_code=401, detail="認証に失敗しました。")
-
-    if client.secret_hash != secret_hash:
-        NaviApiLog.warning("hash値が一致しません。")
-        raise HTTPException(status_code=401, detail="認証に失敗しました。")
-
-    if client.is_active != True:
-        NaviApiLog.warning(f"対象の認証情報は使用できません。 client_id={client_id}")
-        raise HTTPException(status_code=403, detail="認証に失敗しました。")
-    if client.home_page != origin:
-        NaviApiLog.warning(f"ホームページが一致しません。 "
-                           f"client_id={client_id} "
-                           f"home_page={client.home_page}")
-
-        raise HTTPException(status_code=403, detail="認証に失敗しました。")
-
-    return client
+    
+    return company.company_id
 
 
 def authenticate_access_token(

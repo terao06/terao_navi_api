@@ -1,6 +1,5 @@
 from app.models.llm.question_llm_model import QuestionLLMModel, State
 from typing import Optional
-from app.core.logging import NaviApiLog
 
 
 class QuestionLLMHelper:

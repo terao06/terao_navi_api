@@ -9,10 +9,11 @@ info:
     このAPIは2段階の認証方式を採用しています：
     
     ### 1. トークン発行（`/auth/token`）
-    - **Basic認証**を使用してクライアント認証
-    - Username: `client_id`
-    - Password: `client_secret`
-    - ヘッダー: `Authorization: Basic {Base64(client_id:client_secret)}`
+    - **カスタムヘッダー認証**を使用してクライアント認証
+    - ヘッダー:
+      - `X-Origin`: リクエスト元のオリジン（例: `https://your-website.com`）
+      - `X-Company-Id`: 企業ID（例: `1`）
+    - データベースに登録された企業情報と照合し、Originがホームページと一致することを確認
     
     ### 2. API呼び出し（`/ask`など）
     - **Bearer Token認証**を使用
@@ -26,14 +27,14 @@ info:
     
     ## 認証フロー
     
-    1. `/auth/token`でBasic認証により`access_token`と`refresh_token`を取得
+    1. `/auth/token`でカスタムヘッダー認証（X-Origin, X-Company-Id）により`access_token`と`refresh_token`を取得
     2. 取得した`access_token`を使用してAPI（`/ask`など）を呼び出し
     3. `access_token`の有効期限が切れたら、`refresh_token`を使用して`/auth/refresh`で新しいトークンペアを取得
     
     ## 初期データ
     
-    開発環境では、コンテナ起動時に動作確認用の認証情報が自動生成されます。
-    詳細は `local_data/credential/test_credential.txt` を参照してください。
+    開発環境では、MySQLデータベースに企業情報（company_id、home_page等）を登録する必要があります。
+    詳細は `local_setting/local_mysql/init.sql` を参照してください。
     
   version: 1.0.0
   contact:
@@ -61,40 +62,48 @@ paths:
         - Authentication
       summary: アクセストークンとリフレッシュトークンを発行
       description: |
-        Basic認証を使用してクライアント認証を行い、アクセストークンとリフレッシュトークンを発行します。
+        カスタムヘッダー認証を使用してクライアント認証を行い、アクセストークンとリフレッシュトークンを発行します。
         
         ### 認証方式
-        - **Basic認証（HTTPBasicCredentials）**を使用
-        - **Username**: `client_id`（例: `adb83002d4d9a6e36...`）
-        - **Password**: `client_secret`（例: `f53e8aa23f072d53...`）
+        - **カスタムヘッダー認証**を使用
+        - **X-Origin**: リクエスト元のオリジン（例: `https://your-website.com`）
+        - **X-Company-Id**: 企業ID（例: `1`）
         
         ### 処理フロー
-        1. Basic認証ヘッダーから`client_id`と`client_secret`を取得
-        2. `client_secret`を復号化してハッシュ値を生成
-        3. DynamoDBから`client_id`に紐づく認証情報を取得
-        4. ハッシュ値とis_activeフラグを検証
-        5. 検証成功後、アクセストークン（短命）とリフレッシュトークン（長命）を生成
-        6. 両方のトークンと有効期限情報を返却
+        1. リクエストヘッダーから`X-Origin`と`X-Company-Id`を取得
+        2. MySQLデータベースから`company_id`に対応する企業情報を取得
+        3. `X-Origin`と企業のホームページ（`home_page`）が一致するかを検証
+        4. 検証成功後、アクセストークン（短命）とリフレッシュトークン（長命）を生成
+        5. 両方のトークンと有効期限情報を返却
         
       operationId: issueToken
       security:
-        - basicAuth: []
+        - apiKeyAuth: []
       parameters:
         - in: header
-          name: Authorization
+          name: X-Origin
           required: true
           schema:
             type: string
-            example: "Basic YWRiODMwMDJkN..."
+            example: "https://your-website.com"
           description: |
-            Basic認証ヘッダー
+            リクエスト元のオリジン
             
-            形式: `Basic {Base64(client_id:client_secret)}`
+            企業のホームページとして登録されているURLと一致する必要があります。
             
-            例:
-            - client_id: `adb83002d4d9a6e36...`
-            - client_secret: `f53e8aa23f072d53...`
-            - Base64エンコード: `YWRiODMwMDJkN...`
+            例: `https://your-website.com`
+        - in: header
+          name: X-Company-Id
+          required: true
+          schema:
+            type: integer
+            example: 1
+          description: |
+            企業ID
+            
+            MySQLデータベースに登録されている企業のIDを指定します。
+            
+            例: `1`
       responses:
         '200':
           description: トークン発行成功
@@ -359,29 +368,23 @@ paths:
 
 components:
   securitySchemes:
-    basicAuth:
-      type: http
-      scheme: basic
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Origin and X-Company-Id
       description: |
-        Basic認証（HTTPBasicCredentials）
+        カスタムヘッダー認証
         
-        **形式**: `Authorization: Basic {Base64(client_id:client_secret)}`
-        
-        **認証情報**:
-        - Username（ユーザー名）: `client_id`
-        - Password（パスワード）: `client_secret`
-        
-        **例**:
-        - client_id: `adb83002d4d9a6e36...`
-        - client_secret: `f53e8aa23f072d53...`
-        - エンコード後: `Authorization: Basic YWRiODMwMDJkN...`
+        **必要なヘッダー**:
+        - `X-Origin`: リクエスト元のオリジン（例: `https://your-website.com`）
+        - `X-Company-Id`: 企業ID（例: `1`）
         
         **検証プロセス**:
-        1. Basic認証ヘッダーから`client_id`と`client_secret`を抽出
-        2. `client_secret`を復号化してハッシュ値を生成（CredentialUtil.decrypt_client_credential）
-        3. DynamoDBから`client_id`に対応する認証クライアント情報を取得
-        4. 保存されたハッシュ値と照合
-        5. `is_active`フラグが`true`であることを確認
+        1. リクエストヘッダーから`X-Origin`と`X-Company-Id`を抽出
+        2. MySQLデータベースから`company_id`に対応する企業情報を取得
+        3. 企業情報が存在することを確認
+        4. `X-Origin`と企業のホームページ（`home_page`カラム）が一致することを確認
+        5. 検証成功後、company_idを返却
         
     bearerAuth:
       type: http

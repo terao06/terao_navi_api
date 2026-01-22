@@ -2,7 +2,6 @@ from fastapi import APIRouter
 from fastapi import Depends
 from app.models.requests.question_request import QuestionRequest
 from app.api.depend import authenticate_access_token
-from app.core.utils.token_util import TokenUtil
 from app.services.question_service import QuestionService
 from app.middlewares.request_wrapper import request_rapper
 from app.middlewares.response_wrapper import response_rapper

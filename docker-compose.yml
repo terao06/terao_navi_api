@@ -52,7 +52,6 @@ services:
       - AWS_REGION=ap-northeast-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy123
-      - DDB_ENDPOINT=http://navi-api-dynamodb:8000
       - SECRETS_MANAGER_ENDPOINT=http://localstack:4566
       - S3_ENDPOINT=http://navi-api-s3:9000
       - SSM_ENDPOINT=http://localstack:4566
@@ -60,8 +59,6 @@ services:
       navi-api-db:
         condition: service_healthy
       navi-api-s3:
-        condition: service_started
-      navi-api-dynamodb:
         condition: service_started
       ssm-seed:
         condition: service_completed_successfully
@@ -116,50 +113,6 @@ services:
       navi-api-db:
         condition: service_healthy
     restart: always
-
-  navi-api-dynamodb:
-    image: amazon/dynamodb-local:latest
-    container_name: navi-api-dynamodb
-    ports:
-      - "8012:8000"
-    command: ["-jar","DynamoDBLocal.jar","-sharedDb", "-dbPath", "/home/dynamodblocal/data"]
-    volumes:
-      - ./local_data/dynamodb:/home/dynamodblocal/data
-    networks:
-      - navi-api-network
-
-  navi-api-dynamodb-init:
-    image: amazon/aws-cli:latest
-    depends_on:
-      - navi-api-dynamodb
-    environment:
-      - AWS_REGION=ap-northeast-1
-      - AWS_ACCESS_KEY_ID=dummy
-      - AWS_SECRET_ACCESS_KEY=dummy123
-      - DDB_ENDPOINT=http://navi-api-dynamodb:8000
-      - DDB_TABLE_PREFIX=
-    volumes:
-      - ./local_setting/local_dynamo/init:/init:ro
-      - .:/work:ro
-      - ./local_data/credential:/output
-    entrypoint: ["/bin/sh", "-c", "sleep 10 && /init/create_tables.sh"]
-    networks:
-      - navi-api-network
-
-  navi-api-dynamodb-admin:
-    image: aaronshaf/dynamodb-admin:latest
-    container_name: navi-api-dynamodb-admin
-    ports:
-      - "8015:8001"
-    environment:
-      - DYNAMO_ENDPOINT=http://navi-api-dynamodb:8000
-      - AWS_REGION=ap-northeast-1
-      - AWS_ACCESS_KEY_ID=dummy
-      - AWS_SECRET_ACCESS_KEY=dummy
-    depends_on:
-      - navi-api-dynamodb
-    networks:
-      - navi-api-network
 
   localstack:
     image: localstack/localstack:latest
