@@ -61,11 +61,18 @@ def insert_test_data(session: Session):
     return _insert
 
 @pytest.fixture(scope="function", autouse=True)
-def auto_insert_default_data(insert_test_data):
+def auto_insert_default_data(request: pytest.FixtureRequest):
+    """DBを使うテストにだけ、基本となるテストデータを投入します。
+
+    以前は autouse fixture が常に `insert_test_data` -> `session` を解決してしまい、
+    DB不要のテスト（例: SSM/Secrets など）でもMySQL接続が発生していました。
     """
-    すべてのテスト実行前に、基本となるテストデータを投入します。
-    """
-    default_files = ['companies.sql', 'applications.sql', 'manuals.sql']
+    # このテストでDBセッションが有効になる場合のみデータ投入する
+    if "session" not in request.fixturenames:
+        return
+
+    insert_test_data = request.getfixturevalue("insert_test_data")
+    default_files = ["companies.sql", "applications.sql", "manuals.sql"]
     insert_test_data(default_files)
 
 @pytest.fixture(scope="session", autouse=True)
@@ -91,25 +98,46 @@ def setup_env_vars():
         aws_secret_access_key="dummy123"
     )
     
-    # テスト用のMySQL設定（localhostを使用）
+    # テスト用のMySQL設定
+    # Windows環境では、DockerのMySQL公開ポートが IPv4(127.0.0.1) だと応答しないケースがあり、
+    # localhost(IPv6 ::1 優先) の方が安定するため host は "localhost" を利用します。
     mysql_test_config = {
         "user": "root",
         "password": "rootpassword",
-        "host": "127.0.0.1",
+        "host": "localhost",
         "port": 3306,
         "database": "db_local",
         "pool_size": 10,
         "max_overflow": 10,
         "pool_timeout": 10,
         "pool_recycle": 10,
-        "pool_pre_ping": 0
+        "pool_pre_ping": 1
     }
     
+    # 既存のシークレットがある場合は退避して、テスト終了後に復元する
+    original_mysql_secret_value = None
+    original_mysql_secret_is_binary = False
+    mysql_secret_existed = False
+
     try:
-        # 既存のシークレットを削除
-        secrets_client.delete_secret(SecretId="mysql_setting", ForceDeleteWithoutRecovery=True)
-    except:
-        pass
+        response = secrets_client.get_secret_value(SecretId="mysql_setting")
+        if "SecretBinary" in response:
+            original_mysql_secret_value = response["SecretBinary"]
+            original_mysql_secret_is_binary = True
+        else:
+            original_mysql_secret_value = response["SecretString"]
+            original_mysql_secret_is_binary = False
+        mysql_secret_existed = True
+    except ClientError as e:
+        if e.response["Error"]["Code"] not in ["ResourceNotFoundException", "InvalidRequestException"]:
+            raise
+
+    # テスト用のシークレットを作る前に、既存があれば削除して衝突を避ける
+    if mysql_secret_existed:
+        try:
+            secrets_client.delete_secret(SecretId="mysql_setting", ForceDeleteWithoutRecovery=True)
+        except ClientError:
+            pass
     
     try:
         # テスト用の設定を作成
@@ -129,11 +157,20 @@ def setup_env_vars():
     
     yield
     
-    # クリーンアップ
+    # クリーンアップ: テスト用のシークレットを削除し、元があれば復元
     try:
         secrets_client.delete_secret(SecretId="mysql_setting", ForceDeleteWithoutRecovery=True)
-    except:
+    except ClientError:
         pass
+
+    if mysql_secret_existed:
+        try:
+            if original_mysql_secret_is_binary:
+                secrets_client.create_secret(Name="mysql_setting", SecretBinary=original_mysql_secret_value)
+            else:
+                secrets_client.create_secret(Name="mysql_setting", SecretString=original_mysql_secret_value)
+        except ClientError:
+            pass
     
     os.environ.clear()
     os.environ.update(original_env)
@@ -368,13 +405,45 @@ def managed_s3_bucket(s3_boto_client):
     """
     @contextlib.contextmanager
     def _managed_s3_bucket(bucket_name: str, files: dict[str, bytes | str] = None):
-        # バケット作成
+        # 既存バケットの場合、既存オブジェクトを消さないように事前スナップショットを取る
+        bucket_existed = False
+        baseline_keys: set[str] = set()
+
         try:
-            s3_boto_client.create_bucket(Bucket=bucket_name)
-        except ClientError as e:
-            # バケットが既に存在する場合などはここでハンドリング（必要に応じてスキップ）
-            if e.response['Error']['Code'] != 'BucketAlreadyOwnedByYou':
-                pass
+            s3_boto_client.head_bucket(Bucket=bucket_name)
+            bucket_existed = True
+        except ClientError:
+            bucket_existed = False
+
+        if not bucket_existed:
+            try:
+                s3_boto_client.create_bucket(Bucket=bucket_name)
+            except ClientError:
+                # 競合などで既に作られていた場合は既存扱いに寄せる
+                bucket_existed = True
+
+        def _list_all_keys() -> set[str]:
+            keys: set[str] = set()
+            continuation_token = None
+            while True:
+                kwargs = {"Bucket": bucket_name}
+                if continuation_token:
+                    kwargs["ContinuationToken"] = continuation_token
+                resp = s3_boto_client.list_objects_v2(**kwargs)
+                for obj in resp.get("Contents", []) or []:
+                    key = obj.get("Key")
+                    if key:
+                        keys.add(key)
+                if resp.get("IsTruncated"):
+                    continuation_token = resp.get("NextContinuationToken")
+                    continue
+                break
+            return keys
+
+        try:
+            baseline_keys = _list_all_keys()
+        except ClientError:
+            baseline_keys = set()
 
         # ファイルアップロード
         if files:
@@ -385,16 +454,22 @@ def managed_s3_bucket(s3_boto_client):
 
         yield bucket_name
 
-        # 後処理: オブジェクト削除 -> バケット削除
+        # 後処理: テスト中に増えたオブジェクトのみ削除（既存データは保持）
         try:
-            # オブジェクト全削除
-            objects = s3_boto_client.list_objects_v2(Bucket=bucket_name)
-            if 'Contents' in objects:
-                delete_keys = [{'Key': obj['Key']} for obj in objects['Contents']]
-                s3_boto_client.delete_objects(Bucket=bucket_name, Delete={'Objects': delete_keys})
-            
-            # バケット削除
-            s3_boto_client.delete_bucket(Bucket=bucket_name)
+            current_keys = _list_all_keys()
+            keys_to_delete = sorted(current_keys - baseline_keys)
+
+            # delete_objects は最大 1000 件ずつ
+            for i in range(0, len(keys_to_delete), 1000):
+                chunk = keys_to_delete[i:i + 1000]
+                s3_boto_client.delete_objects(
+                    Bucket=bucket_name,
+                    Delete={"Objects": [{"Key": k} for k in chunk]}
+                )
+
+            # このフィクスチャが新規作成したバケットだけ削除する
+            if not bucket_existed:
+                s3_boto_client.delete_bucket(Bucket=bucket_name)
         except ClientError:
             pass
 

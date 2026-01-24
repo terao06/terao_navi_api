@@ -36,7 +36,7 @@ class QuestionService:
         file_paths = []
         for manual in manuals:
             file_paths.append(
-                f"{COMMON_PATH}/{manual.application_id}/{manual.manual_id}.{manual.file_extension}"
+                f"{COMMON_PATH}/{manual.company_id}/{manual.application_id}/{manual.manual_id}.{manual.file_extension}"
             )
         NaviApiLog.info(f"s3ファイルパスリスト={file_paths}")
 

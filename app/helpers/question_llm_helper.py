@@ -11,6 +11,7 @@ class QuestionLLMHelper:
             file_paths: フィルタリングするファイルパスのリスト
             collection_name: 使用するコレクション名
         """
+        self.file_paths = file_paths
         self.question_llm_model = QuestionLLMModel(file_paths=file_paths, collection_name=collection_name)
 
     def answer_question(self, question_text: str) -> str:
@@ -23,6 +24,8 @@ class QuestionLLMHelper:
         Returns:
             str: 生成された回答テキスト
         """
+        if not self.file_paths:
+            return "申し訳ございません。\n回答が見つかりませんでした。"
         graph = self.question_llm_model.get_graph()
         user_query = State(query=question_text)
         first_response = graph.invoke(input=user_query)

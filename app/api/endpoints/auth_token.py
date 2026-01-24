@@ -5,7 +5,7 @@ from app.middlewares.request_wrapper import request_rapper
 from app.middlewares.response_wrapper import response_rapper
 from app.services.auth_service import AuthService
 from app.api.depend import authenticate_refresh_token
-from app.models.mysql.company_model import CompanyModel
+from app.core.logging import NaviApiLog
 
 token_router = APIRouter()
 
@@ -18,6 +18,7 @@ def read_root(
     """
     トークンの発行を行います。
     """
+    NaviApiLog.info("トークン発効を行います")
     return AuthService().get_auth_token(company_id=company_id)
 
 
@@ -28,4 +29,5 @@ def refresh_token(company_id: int = Depends(authenticate_refresh_token)):
     """
     新しいアクセストークンとリフレッシュトークンを発行します。
     """
+    NaviApiLog.info("新しいトークン発効を行います")
     return AuthService().refresh_auth_token(company_id=company_id)

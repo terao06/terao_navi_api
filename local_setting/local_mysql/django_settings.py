@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
     'local_setting.local_mysql.apps.ModelsConfig',
+    'django.contrib.sessions'
 ]
 
 # データベース

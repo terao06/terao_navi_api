@@ -25,13 +25,14 @@ def init_vectors():
         file_paths = []
         if objects:
             for obj in objects:
-                # S3のキーを取得（例: "1/100.pdf"）
+                # S3のキーを取得（例: "/1/1/100.pdf"）
                 key = obj['Key']
                 # PDFファイルのみ対象にする等のフィルタが必要ならここに記述
                 if key.endswith('.pdf'):
                     # LangChainのS3FileLoaderはbucket引数とkey引数を別々に取るため
                     # ここではkeyのみをリストに追加する
                     file_paths.append(key)
+        NaviApiLog.warning(f"ファイル数: {file_paths}")
         
         if not file_paths:
             NaviApiLog.warning(f"バケット'{bucket_name}'にPDFファイルが見つかりませんでした。")

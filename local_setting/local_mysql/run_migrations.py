@@ -69,6 +69,7 @@ def run_migrations():
     print("\n=== マイグレーションの実行 ===")
     try:
         execute_from_command_line(['manage.py', 'migrate'])
+        execute_from_command_line(['manage.py', 'migrate', 'sessions'])
         print("\n=== Migration completed successfully ===")
     except Exception as e:
         print(f"Error during migration: {e}")

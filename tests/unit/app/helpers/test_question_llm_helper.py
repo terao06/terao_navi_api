@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from app.helpers.question_llm_helper import QuestionLLMHelper
 from app.models.llm.question_llm_model import State
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -7,6 +7,8 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 class TestQuestionLLMHelper:
     """QuestionLLMHelperのテストクラス"""
+
+    DEFAULT_NOT_FOUND_MESSAGE = "申し訳ございません。\n回答が見つかりませんでした。"
     
     @pytest.mark.parametrize("test_case", [
         {
@@ -109,8 +111,8 @@ class TestQuestionLLMHelper:
             mock_response = {"messages": mock_messages}
             mock_graph.invoke.return_value = mock_response
             
-            # テスト実行
-            helper = QuestionLLMHelper(file_paths=None)
+            # テスト実行（file_pathsが空だと早期returnするため、ダミーのfile_pathsを渡す）
+            helper = QuestionLLMHelper(file_paths=["manual.pdf"])
             result = helper.answer_question(question_text)
             
             # 検証
@@ -161,7 +163,8 @@ class TestQuestionLLMHelper:
             mock_model_instance.get_graph.return_value = mock_graph
             mock_graph.invoke.return_value = {"messages": mock_messages}
             
-            helper = QuestionLLMHelper(file_paths=None)
+            # file_pathsが空だと早期returnするため、ダミーのfile_pathsを渡す
+            helper = QuestionLLMHelper(file_paths=["manual.pdf"])
             result = helper.answer_question(question_text)
             
             assert result == expected_answer
@@ -207,7 +210,8 @@ class TestQuestionLLMHelper:
             # get_graphが例外を投げる
             mock_model_instance.get_graph.side_effect = Exception("モデルエラー")
             
-            helper = QuestionLLMHelper(file_paths=None)
+            # file_pathsが空だと早期returnするため、ダミーのfile_pathsを渡す
+            helper = QuestionLLMHelper(file_paths=["manual.pdf"])
             
             with pytest.raises(Exception, match="モデルエラー"):
                 helper.answer_question("テスト質問")
@@ -224,7 +228,8 @@ class TestQuestionLLMHelper:
             # graph.invokeが例外を投げる
             mock_graph.invoke.side_effect = Exception("グラフ実行エラー")
             
-            helper = QuestionLLMHelper(file_paths=None)
+            # file_pathsが空だと早期returnするため、ダミーのfile_pathsを渡す
+            helper = QuestionLLMHelper(file_paths=["manual.pdf"])
             
             with pytest.raises(Exception, match="グラフ実行エラー"):
                 helper.answer_question("テスト質問")
@@ -241,7 +246,8 @@ class TestQuestionLLMHelper:
             # 空のmessagesを返す
             mock_graph.invoke.return_value = {"messages": []}
             
-            helper = QuestionLLMHelper(file_paths=None)
+            # file_pathsが空だと早期returnするため、ダミーのfile_pathsを渡す
+            helper = QuestionLLMHelper(file_paths=["manual.pdf"])
             
             # messagesが空の場合、IndexErrorが発生するはず
             with pytest.raises(IndexError):
@@ -264,7 +270,8 @@ class TestQuestionLLMHelper:
             ]
             mock_graph.invoke.side_effect = responses
             
-            helper = QuestionLLMHelper(file_paths=None)
+            # file_pathsが空だと早期returnするため、ダミーのfile_pathsを渡す
+            helper = QuestionLLMHelper(file_paths=["manual.pdf"])
             
             # 3つの質問を実行
             result1 = helper.answer_question("質問1")
@@ -278,3 +285,15 @@ class TestQuestionLLMHelper:
             assert mock_graph.invoke.call_count == 3
             # get_graphは初回のみ呼ばれる（キャッシュされる）
             assert mock_model_instance.get_graph.call_count == 3
+
+    def test_answer_question_without_file_paths_returns_default_message(self):
+        """file_paths未指定（または空）だと固定のメッセージを返すテスト"""
+        with patch('app.helpers.question_llm_helper.QuestionLLMModel') as mock_model_class:
+            mock_model_instance = MagicMock()
+            mock_model_class.return_value = mock_model_instance
+
+            helper = QuestionLLMHelper(file_paths=None)
+            result = helper.answer_question("テスト質問")
+
+            assert result == self.DEFAULT_NOT_FOUND_MESSAGE
+            mock_model_instance.get_graph.assert_not_called()

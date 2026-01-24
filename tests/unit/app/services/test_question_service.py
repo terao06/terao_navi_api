@@ -25,7 +25,7 @@ class TestQuestionService:
                     ManualDto(company_id=1, application_id=10, manual_id=100, file_extension="pdf"),
                     ManualDto(company_id=1, application_id=10, manual_id=101, file_extension="docx"),
                 ],
-                ["manuals/10/100.pdf", "manuals/10/101.docx"]
+                ["manuals/1/10/100.pdf", "manuals/1/10/101.docx"]
             ),
             (
                 "application_idを指定しない場合（全マニュアル対象）",
@@ -37,7 +37,7 @@ class TestQuestionService:
                     ManualDto(company_id=1, application_id=10, manual_id=101, file_extension="docx"),
                     ManualDto(company_id=1, application_id=20, manual_id=200, file_extension="pdf"),
                 ],
-                ["manuals/10/100.pdf", "manuals/10/101.docx", "manuals/20/200.pdf"]
+                ["manuals/1/10/100.pdf", "manuals/1/10/101.docx", "manuals/1/20/200.pdf"]
             ),
             (
                 "マニュアルが存在しない場合",
@@ -53,7 +53,7 @@ class TestQuestionService:
                 99,
                 "テスト質問",
                 [ManualDto(company_id=1, application_id=99, manual_id=888, file_extension="txt")],
-                ["manuals/99/888.txt"]
+                ["manuals/1/99/888.txt"]
             ),
             (
                 "複数の異なる拡張子を持つマニュアル",
@@ -65,7 +65,7 @@ class TestQuestionService:
                     ManualDto(company_id=2, application_id=50, manual_id=502, file_extension="docx"),
                     ManualDto(company_id=2, application_id=50, manual_id=503, file_extension="xlsx"),
                 ],
-                ["manuals/50/501.pdf", "manuals/50/502.docx", "manuals/50/503.xlsx"]
+                ["manuals/2/50/501.pdf", "manuals/2/50/502.docx", "manuals/2/50/503.xlsx"]
             ),
         ],
         ids=lambda x: x if isinstance(x, str) else ""
