@@ -17,7 +17,7 @@ class State(BaseModel):
 
 
 class QuestionLLMModel(BaseLLMModel):
-    def __init__(self, file_paths: Optional[list[str]] = None, collection_name: str = "manuals") -> None:
+    def __init__(self, file_paths: list[str], collection_name: str = "manuals") -> None:
         """
         質問応答用のLLMモデルを初期化する
         

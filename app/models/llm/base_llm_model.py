@@ -10,10 +10,13 @@ from langgraph.graph.state import CompiledStateGraph
 from app.models.llm.embedding_model import SentenceTransformerEmbeddingsModel
 from sqlalchemy import text
 from app.core.logging import NaviApiLog
+from langchain_openai.embeddings import OpenAIEmbeddings
 
+
+USE_OPEN_AI = False
 
 class BaseLLMModel:
-    def __init__(self, file_paths: Optional[list[str]] = None, collection_name: str = "manuals") -> None:
+    def __init__(self, file_paths: list[str], collection_name: str = "manuals") -> None:
         self.params = SsmClient()
         self.pg_database = PostgreSQLDatabase()
         self.collection_name = collection_name  # コレクション名を保存
@@ -33,7 +36,7 @@ class BaseLLMModel:
             raise RuntimeError("システム設定の取得に失敗しました")
 
         # LLM設定値の検証
-        required_llm_keys = ["model_name", "base_url", "api_key", "temperature"]
+        required_llm_keys = ["model_name", "api_key", "temperature"]
         missing_llm_keys = [key for key in required_llm_keys if llm_setting.get(key) is None]
         if missing_llm_keys:
             raise KeyError(f"LLMの必須設定が不足しています: {', '.join(missing_llm_keys)}")
@@ -43,13 +46,20 @@ class BaseLLMModel:
             raise KeyError("埋め込みの必須設定が不足しています: model_name")
 
         try:
-            embeddings = SentenceTransformerEmbeddingsModel(
-                model_name=embedding_setting.get("model_name"),
-                device=embedding_setting.get("device", "cpu")
-            )
+            if USE_OPEN_AI:
+                embeddings = OpenAIEmbeddings(
+                    model=embedding_setting.get("model_name"),
+                    api_key=embedding_setting.get("api_key"),
+                )
+            else:
+                embeddings = SentenceTransformerEmbeddingsModel(
+                    model_name=embedding_setting.get("model_name"),
+                    device=embedding_setting.get("device", "cpu")
+                )
+
             self.llm = ChatOpenAI(
                 model=llm_setting.get("model_name"),
-                base_url=llm_setting.get("base_url"),
+                base_url=llm_setting.get("base_url", None),
                 api_key=llm_setting.get("api_key"),
                 temperature=llm_setting.get("temperature"),
             )

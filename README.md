@@ -10,11 +10,9 @@
 - [アーキテクチャ](#アーキテクチャ)
 - [クイックスタート](#クイックスタート)
 - [インストール](#インストール)
-- [環境構築](#環境構築)
 - [API仕様](#api仕様)
 - [認証フロー](#認証フロー)
-- [開発](#開発)
-- [デプロイ](#デプロイ)
+- [関連リポジトリ](#関連リポジトリ)
 - [ライセンス](#ライセンス)
 
 ## 特徴
@@ -114,129 +112,43 @@ app/
 git clone https://github.com/terao06/terao_navi_api.git
 cd terao_navi_api
 
-# 2. Dockerコンテナを起動
-docker-compose up -d
+# 2. embedding モデル設定(ローカル動作時)
+pip install -U huggingface-hub
+cd terao_navi_api\local_setting\local_app\llm_models
+hf download BAAI/bge-m3 --local-dir .
 
-# 3. 依存関係をインストール
-pip install -r requirements.txt
+# 2. embedding モデル設定(open aiのAPI使用時)
+# local_setting/ssm_data/embedding_setting.json内に以下を設定
+#   - model_name: 使用するAPIのモデルを定義
+#   - api_key: 作成したapi_keyを設定
+#   - app/terao_navi_api/app/models/llm/base_llm_model.pyのUSE_OPEN_AI定数をTrueに変更
 
-# 4. データベース初期化
-python local_setting/local_mysql/run_migrations.py
+# 3, LLMモデルの設定(gpt-oss使用時)
+# gpt-ossをダウンロード https://huggingface.co/openai/gpt-oss-20b
+# Ollamaの設定を行う https://docs.ollama.com/quickstart
 
-# 5. S3バケットにテスト用ドキュメントを配置
-# local_setting/local_s3/local_buckets/manuals/1/ ディレクトリを作成
-New-Item -ItemType Directory -Force -Path "local_setting/local_s3/local_buckets/manuals/1"
+# 3. LLM モデルの設定(open aiのAPI使用時)
+# local_setting/ssm_data/llm_setting.json内に以下を設定
+#   - model_name: 使用するAPIのモデルを定義
+#   - base_url: 削除
+#   - api_key: 作成したapi_keyを設定
 
-# テスト用のPDFファイルを配置（ファイル名は1.pdfとする）
-# ※ DB上のapplication_id=1に対応するドキュメントとして認識されます
-# 例: Copy-Item "your_document.pdf" -Destination "local_setting/local_s3/local_buckets/manuals/1/1.pdf"
+# 4. Dockerコンテナを起動(MAC OSなど)
+Makefile up
 
-# 6. 開発サーバーを起動
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# 4. Dockerコンテナを起動(Windows)
+make.ps1 up
+
 ```
 
-APIは `http://localhost:8000` で起動します。
+APIは `http://localhost:8005` で起動します。
 
 > **注意**: 動作確認時は `local_setting/local_s3/local_buckets/manuals/1/1.pdf` にドキュメントを配置してください。ファイル名は必ず `1.pdf` とする必要があります（vector_dbのlangchain_pg_embeddingにおけるsourceとパスを合わせるため）。
 
 ### APIドキュメントの確認
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-## インストール
-
-### Pythonパッケージ
-
-```powershell
-# 本番用パッケージ
-pip install -r requirements.txt
-
-# 開発用パッケージ（テスト、Lintなど含む）
-pip install -r requirements_dev.txt
-```
-
-### 主要な依存関係
-
-```txt
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-pydantic>=2.0.0
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-boto3>=1.28.0
-python-jose[cryptography]
-passlib[bcrypt]
-```
-
-## 環境構築
-
-### Docker Compose
-
-プロジェクトには以下のサービスが含まれています：
-
-- **MySQL**: アプリケーションデータベース
-- **PostgreSQL (pgvector)**: ベクトル検索用DB
-- **DynamoDB Local**: メタデータストア
-- **MinIO**: S3互換オブジェクトストレージ
-- **LocalStack**: AWS サービスのローカルエミュレート
-
-```powershell
-# すべてのサービスを起動
-docker-compose up -d
-
-# 特定のサービスのみ起動
-docker-compose up -d mysql postgres
-
-# ログを確認
-docker-compose logs -f
-
-# サービスを停止
-docker-compose down
-```
-
-### 環境変数
-
-`.env`ファイルを作成して必要な環境変数を設定：
-
-```env
-# データベース
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=password
-MYSQL_DATABASE=db_local
-
-# PostgreSQL (pgvector)
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=password
-POSTGRES_DATABASE=vector_db
-
-# AWS (本番環境)
-AWS_REGION=ap-northeast-1
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-
-# DynamoDB
-DYNAMODB_ENDPOINT=http://localhost:8001
-DYNAMODB_TABLE_NAME=your_table_name
-
-# S3/MinIO
-S3_ENDPOINT=http://localhost:9000
-S3_BUCKET_NAME=manuals
-
-# 認証
-JWT_SECRET_KEY=your_secret_key_here
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-# LLM設定
-LLM_MODEL=your_llm_model
-LLM_API_KEY=your_llm_api_key
-```
+- Swagger UI: `http://localhost:8005/docs`
+- ReDoc: `http://localhost:8005/redoc`
 
 ## API仕様
 
@@ -255,10 +167,15 @@ X-Company-Id: 1
 **レスポンス:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "expires_in": 1800
+    "status": "success",
+    "data": {
+        "access_token": "5wUc0EaEz29X_KwFAPyhq9s6o...",
+        "expires_at": "2026-01-27T14:05:22.233837+00:00",
+        "ttl_seconds": 300,
+        "refresh_token": "X9WMrompmynJApGlrOf7OBxq5k...",
+        "refresh_expires_at": "2026-01-27T15:00:22.233839+00:00",
+        "refresh_ttl_seconds": 3600
+    }
 }
 ```
 
@@ -266,19 +183,23 @@ X-Company-Id: 1
 
 リフレッシュトークンを使って新しいアクセストークンを取得します。
 
-**リクエスト:**
-```json
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
+**リクエスト（ヘッダー認証）:**
+```
+Authorization: X9WMrompmynJApGlrOf7OBxq5k...
 ```
 
 **レスポンス:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "expires_in": 1800
+    "status": "success",
+    "data": {
+        "access_token": "IUh_y3BDMoVf_5m_PnBawoP7b...",
+        "expires_at": "2026-01-27T14:09:55.307701+00:00",
+        "ttl_seconds": 300,
+        "refresh_token": "VSyYGt3ZUDVYankrqX6-cuPE...",
+        "refresh_expires_at": "2026-01-27T15:04:55.307759+00:00",
+        "refresh_ttl_seconds": 3600
+    }
 }
 ```
 
@@ -298,46 +219,19 @@ Content-Type: application/json
 {
   "question": "あなたの質問",
   "application_id": 1,
-  "context": {
-    "session_id": "optional_session_id"
-  }
 }
 ```
 
 **レスポンス:**
 ```json
 {
-  "answer": "AIからの回答",
-  "sources": [
-    {
-      "document_id": "doc_123",
-      "title": "参照元ドキュメント",
-      "relevance_score": 0.95
-    }
-  ],
-  "metadata": {
-    "model": "gpt-4",
-    "tokens_used": 150,
-    "processing_time_ms": 1234
+  "status": "success",
+  "data": {
+    "answer": "AIの回答",
   }
 }
 ```
 
-### エラーレスポンス
-
-すべてのエラーは以下の形式で返されます：
-
-```json
-{
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "人間が読めるエラーメッセージ",
-    "details": {
-      "field": "追加の詳細情報"
-    }
-  }
-}
-```
 
 **主なエラーコード:**
 
@@ -347,7 +241,6 @@ Content-Type: application/json
 | `FORBIDDEN` | 403 | アクセス権限がない |
 | `NOT_FOUND` | 404 | リソースが見つからない |
 | `VALIDATION_ERROR` | 422 | リクエストデータが不正 |
-| `RATE_LIMIT_EXCEEDED` | 429 | レート制限を超過 |
 | `INTERNAL_ERROR` | 500 | サーバー内部エラー |
 
 ## 認証フロー
@@ -385,26 +278,6 @@ sequenceDiagram
     API-->>Client: 新しいaccess_token
 ```
 
-### セキュリティのベストプラクティス
-
-1. **Originチェック**: Originヘッダーで企業のホームページと照合し、許可されたドメインからのみアクセス可能
-2. **企業ID検証**: X-Company-Idヘッダーでデータベース上の企業情報と照合
-3. **レート制限**: 過度なリクエストを防ぐ
-4. **トークン有効期限**: アクセストークンは短め（5分）、リフレッシュトークンは長め（1時間）
-5. **HTTPS必須**: 本番環境では必ずHTTPSを使用
-6. **ホームページ登録管理**: データベースに登録された企業のホームページのみアクセス許可
-
-## 開発
-
-### 開発サーバーの起動
-
-```powershell
-# ホットリロード有効
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# または
-python -m uvicorn app.main:app --reload
-```
 
 ### テストの実行
 
@@ -421,131 +294,6 @@ pytest tests/unit/test_auth_service.py
 # マーカーを使った実行
 pytest -m "not slow"
 ```
-
-### Lintとフォーマット
-
-```powershell
-# flake8でLint
-flake8 app/ tests/
-
-# blackでフォーマット
-black app/ tests/
-
-# isortでimportを整理
-isort app/ tests/
-
-# mypyで型チェック
-mypy app/
-```
-
-### データベースマイグレーション
-
-```powershell
-# マイグレーションファイルを作成
-alembic revision --autogenerate -m "Add new table"
-
-# マイグレーションを適用
-alembic upgrade head
-
-# マイグレーションをロールバック
-alembic downgrade -1
-```
-
-### デバッグ
-
-VS Codeのデバッグ設定（`.vscode/launch.json`）：
-
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Python: FastAPI",
-      "type": "python",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "app.main:app",
-        "--reload",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000"
-      ],
-      "jinja": true,
-      "justMyCode": true
-    }
-  ]
-}
-```
-
-## デプロイ
-
-### Dockerイメージのビルド
-
-```powershell
-# イメージをビルド
-docker build -t terao-navi-api:latest -f docker/local/Dockerfile .
-
-# イメージを実行
-docker run -p 8000:8000 --env-file .env terao-navi-api:latest
-```
-
-### 本番環境へのデプロイ
-
-#### AWS ECS/Fargateの場合
-
-1. ECRにイメージをプッシュ
-2. タスク定義を作成
-3. サービスを作成
-4. ALBを設定
-5. 環境変数を設定（AWS Secrets Manager推奨）
-
-#### Kubernetes/EKSの場合
-
-```yaml
-# deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: terao-navi-api
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: terao-navi-api
-  template:
-    metadata:
-      labels:
-        app: terao-navi-api
-    spec:
-      containers:
-      - name: api
-        image: your-registry/terao-navi-api:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: url
-```
-
-### 監視とログ
-
-- **ログ**: CloudWatch Logs / ELK Stack
-- **メトリクス**: Prometheus + Grafana
-- **トレーシング**: AWS X-Ray / Jaeger
-- **アラート**: CloudWatch Alarms / PagerDuty
-
-## パフォーマンス最適化
-
-- **データベース接続プーリング**: SQLAlchemyのpoolサイズを調整
-- **非同期処理**: FastAPIの非同期エンドポイントを活用
-- **キャッシング**: Redis / ElastiCacheでトークンやクエリ結果をキャッシュ
-- **ベクトル検索の最適化**: pgvectorのインデックス設定を調整
-- **水平スケーリング**: 複数のワーカープロセス/コンテナで分散
 
 ## 関連リポジトリ
 
