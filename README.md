@@ -37,7 +37,6 @@ graph TB
     end
     
     subgraph "Terao Navi API"
-        FastAPI[FastAPI Server]
         Auth[認証サービス]
         Question[質問サービス]
         LLMHelper[LLMヘルパー]
