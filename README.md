@@ -41,26 +41,27 @@ graph TB
         Question[質問サービス]
         LLMHelper[LLMヘルパー]
     end
-    
+    subgraph "外部サービス"
+        LLM[LLMエンジン]
+    end
     subgraph "データストア"
         MySQL[(MySQL)]
-        DynamoDB[(DynamoDB)]
+        SM[(シークレットマネジャー)]
+        SSM[(パラメータストア)]
         S3[(S3/MinIO)]
         VectorDB[(PostgreSQL<br/>pgvector)]
     end
     
-    subgraph "外部サービス"
-        LLM[LLMエンジン]
-    end
-    
-    Client -->|Basic認証| Auth
+    Client -->|ドメイン認証| Auth
+    Auth -->|データ取得| MySQL
     Auth -->|トークン発行| Client
     Client -->|Bearer認証| Question
     Question -->|クエリ| LLMHelper
     LLMHelper -->|検索| VectorDB
     LLMHelper -->|呼び出し| LLM
     Question -->|データ取得| MySQL
-    Question -->|メタデータ| DynamoDB
+    Question -->|設定データ| SM
+    Question -->|設定データ| SSM
     Question -->|ファイル| S3
 ```
 
