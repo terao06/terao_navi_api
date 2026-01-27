@@ -123,7 +123,7 @@ hf download BAAI/bge-m3 --local-dir .
 #   - api_key: 作成したapi_keyを設定
 #   - app/terao_navi_api/app/models/llm/base_llm_model.pyのUSE_OPEN_AI定数をTrueに変更
 
-# 3, LLMモデルの設定(gpt-oss使用時)
+# 3. LLMモデルの設定(gpt-oss使用時)
 # gpt-ossをダウンロード https://huggingface.co/openai/gpt-oss-20b
 # Ollamaの設定を行う https://docs.ollama.com/quickstart
 
