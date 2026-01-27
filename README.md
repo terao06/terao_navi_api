@@ -248,7 +248,7 @@ LLM_API_KEY=your_llm_api_key
 
 **リクエスト（カスタムヘッダー認証）:**
 ```
-X-Origin: https://your-website.com
+Origin: https://your-website.com
 X-Company-Id: 1
 ```
 
@@ -361,7 +361,7 @@ sequenceDiagram
     participant Auth as 認証サービス
     participant DB as データベース
     
-    Client->>API: POST /auth/token (X-Origin, X-Company-Id)
+    Client->>API: POST /auth/token (Origin, X-Company-Id)
     API->>Auth: 認証情報を検証
     Auth->>DB: 企業情報を確認
     DB-->>Auth: 企業情報（home_page）
@@ -387,10 +387,10 @@ sequenceDiagram
 
 ### セキュリティのベストプラクティス
 
-1. **Originチェック**: X-Originヘッダーで企業のホームページと照合し、許可されたドメインからのみアクセス可能
+1. **Originチェック**: Originヘッダーで企業のホームページと照合し、許可されたドメインからのみアクセス可能
 2. **企業ID検証**: X-Company-Idヘッダーでデータベース上の企業情報と照合
 3. **レート制限**: 過度なリクエストを防ぐ
-4. **トークン有効期限**: アクセストークンは短め（30分）、リフレッシュトークンは長め（7日）
+4. **トークン有効期限**: アクセストークンは短め（5分）、リフレッシュトークンは長め（1時間）
 5. **HTTPS必須**: 本番環境では必ずHTTPSを使用
 6. **ホームページ登録管理**: データベースに登録された企業のホームページのみアクセス許可
 

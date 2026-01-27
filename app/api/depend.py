@@ -7,7 +7,6 @@ from app.core.aws.secret_manager import SecretManager
 from sqlalchemy.orm import Session
 from app.repositories.company_repository import CompanyRepository
 from app.core.logging import NaviApiLog
-from app.models.mysql.company_model import CompanyModel
 from app.core.database.mysql import MySQLDatabase
 
 bearer = HTTPBearer(auto_error=False)
@@ -31,7 +30,7 @@ def require_api_key(
     request: Request,
     session: Session = Depends(get_db_session)
 ) -> int:
-    origin = request.headers.get("X-Origin", None)
+    origin = request.headers.get("Origin", None)
     company_id = request.headers.get("X-Company-Id", None)
     if not origin or not company_id:
         NaviApiLog.warning(
