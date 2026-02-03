@@ -19,6 +19,8 @@ class BaseLLMModel:
     def __init__(self, file_paths: list[str], collection_name: str = "manuals") -> None:
         self.params = SsmClient()
         self.pg_database = PostgreSQLDatabase()
+        if not file_paths:
+            raise ValueError("file_pathsを空にすることはできません")
         self.collection_name = collection_name  # コレクション名を保存
         self.file_paths = file_paths  # フィルタ用のファイルパスを保存
 
@@ -79,45 +81,25 @@ class BaseLLMModel:
                 pre_delete_collection=False,
             )
             # 初期化時にデフォルトのretrieverを設定
-            self.retriever = self._create_retriever(file_paths)
+            self.retriever = self._create_retriever()
 
         except Exception as e:
             NaviApiLog.error(f"Vector Storeの初期化に失敗しました: {e}")
             raise RuntimeError("ベクターストアの初期化に失敗しました")
 
-    def _create_retriever(self, file_paths: Optional[list[str]] = None):
+    def _create_retriever(self):
         """
         指定されたfile_pathsでフィルタリングされたretrieverを作成する。
         file_pathsがNoneの場合、フィルタなしのretrieverを返す。
         """
         try:
             search_kwargs = {}
-            if file_paths:
-                search_kwargs["filter"] = {"source": {"$in": file_paths}}
+            search_kwargs["filter"] = {"source": {"$in": self.file_paths}}
             
             return self.vector_store.as_retriever(search_kwargs=search_kwargs)
         except Exception as e:
             NaviApiLog.error(f"Retrieverの作成に失敗しました: {e}")
             raise RuntimeError("検索機能の作成に失敗しました")
-
-    def update_retriever(self, file_paths: Optional[list[str]] = None) -> None:
-        """
-        retrieverのフィルタを更新する。
-        検索対象のファイルパスを動的に変更したい場合に使用する。
-        
-        Args:
-            file_paths: フィルタリングするファイルパスのリスト。
-                       Noneの場合、保存されているfile_pathsを使用。
-        """
-        try:
-            target_paths = file_paths if file_paths is not None else self.file_paths
-            self.retriever = self._create_retriever(target_paths)
-            if file_paths is not None:
-                self.file_paths = file_paths  # 新しいfile_pathsを保存
-            NaviApiLog.info(f"Retrieverを更新しました (ファイルパス数: {len(target_paths) if target_paths else 0})")
-        except Exception as e:
-            NaviApiLog.error(f"Retrieverの更新に失敗しました: {e}")
-            raise RuntimeError("検索機能の更新に失敗しました")
 
     def get_existing_sources(self) -> set[str]:
         """
@@ -164,7 +146,7 @@ class BaseLLMModel:
             NaviApiLog.error(f"既存ソースの取得に失敗しました: {e}")
             raise RuntimeError("データの取得に失敗しました")
 
-    def ingest_documents(self, bucket_name: str, file_paths: list[str]) -> None:
+    def ingest_documents(self, bucket_name: str) -> None:
         """
         指定されたファイルをS3からロードしてVector DBに追加する。
         初期化バッチ等から呼び出すことを想定。
@@ -180,11 +162,9 @@ class BaseLLMModel:
         """
         if not bucket_name:
             raise ValueError("bucket_nameを空にすることはできません")
-        if not file_paths:
-            raise ValueError("file_pathsを空にすることはできません")
         
         try:
-            documents = self._load_documents(bucket_name, file_paths)
+            documents = self._load_documents(bucket_name)
             if documents:
                 NaviApiLog.info(f"{len(documents)} 件のドキュメントをベクターストアに追加します")
                 self.vector_store.add_documents(documents)
@@ -195,7 +175,7 @@ class BaseLLMModel:
             NaviApiLog.error(f"ドキュメントのインジェストに失敗しました: {e}")
             raise RuntimeError("ドキュメントの追加に失敗しました")
 
-    def _load_documents(self, bucket_name: str, file_paths: list[str]) -> list:
+    def _load_documents(self, bucket_name: str) -> list:
         """
         S3からドキュメントをロード
         
@@ -217,7 +197,7 @@ class BaseLLMModel:
         if not access_key_id or not secret_access_key:
             NaviApiLog.warning("AWS認証情報が環境変数に見つかりません")
         
-        for file_path in file_paths:
+        for file_path in self.file_paths:
             try:
                 if not file_path:
                     NaviApiLog.warning("空のファイルパスが検出されました。スキップします")

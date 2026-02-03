@@ -97,7 +97,6 @@ class QuestionLLMModel(BaseLLMModel):
             if not state.query:
                 NaviApiLog.warning("llm_responseに空のクエリが提供されました")
                 return {"messages": [AIMessage(content="質問が空です。質問を入力してください。")]}
-            
             prompt_context = self.question_llm_setting.get("prompt_context")
             if not prompt_context:
                 raise KeyError("prompt_contextが設定されていません")

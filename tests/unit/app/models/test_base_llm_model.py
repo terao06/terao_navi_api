@@ -61,7 +61,7 @@ class TestBaseLLMModel:
             with managed_parameter("llm_setting", json.dumps(llm_config)):
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     model = ConcreteLLMModel(
-                        file_paths=None,
+                        file_paths=["dummy.txt"],
                         collection_name=setup_postgresql_test_collection
                     )
                     # 検証
@@ -70,7 +70,7 @@ class TestBaseLLMModel:
                     assert model.vector_store is not None
                     assert model.retriever is not None
                     assert model.collection_name == setup_postgresql_test_collection
-                    assert model.file_paths is None
+                    assert model.file_paths == ["dummy.txt"]
     
     @pytest.mark.parametrize("test_case", [
         {
@@ -166,72 +166,10 @@ class TestBaseLLMModel:
         ):
             if error_match:
                 with pytest.raises(expected_error, match=error_match):
-                    ConcreteLLMModel(collection_name="test_collection")
+                    ConcreteLLMModel(file_paths=["dummy.txt"], collection_name="test_collection")
             else:
                 with pytest.raises(expected_error):
-                    ConcreteLLMModel(collection_name="test_collection")
-    
-    @pytest.mark.parametrize("test_case", [
-        {
-            "description": "file_pathsを更新できる",
-            "initial_paths": None,
-            "update_paths": ["path/to/file1.txt", "path/to/file2.txt"],
-            "should_succeed": True
-        },
-        {
-            "description": "初期file_pathsあり、更新後も保持",
-            "initial_paths": ["initial/file.txt"],
-            "update_paths": ["updated/file1.txt", "updated/file2.txt"],
-            "should_succeed": True
-        }
-    ], ids=lambda x: x["description"])
-    def test_update_retriever(
-        self,
-        test_case,
-        managed_secret,
-        managed_parameter,
-        setup_postgresql_test_collection
-    ):
-        """retrieverのフィルタ更新テスト"""
-        postgresql_config = {
-            "user": "vector_user",
-            "password": "vector_password",
-            "host": "localhost",
-            "port": "5432",
-            "database": "vector_db"
-        }
-        
-        llm_config = {
-            "model_name": "gpt-3.5-turbo",
-            "base_url": "http://localhost:8000",
-            "api_key": "test-api-key",
-            "temperature": 0.7
-        }
-        
-        embedding_config = {
-            "model_name": "sentence-transformers/all-MiniLM-L6-v2",
-            "device": "cpu"
-        }
-        
-        initial_paths = test_case["initial_paths"]
-        update_paths = test_case["update_paths"]
-        
-        with managed_secret("postgresql_setting", json.dumps(postgresql_config)):
-            with managed_parameter("llm_setting", json.dumps(llm_config)):
-                with managed_parameter("embedding_setting", json.dumps(embedding_config)):
-                    # 初期化
-                    model = ConcreteLLMModel(
-                        file_paths=initial_paths,
-                        collection_name=setup_postgresql_test_collection
-                    )
-                    assert model.file_paths == initial_paths
-                    
-                    # file_pathsを更新
-                    model.update_retriever(update_paths)
-                    
-                    # 検証
-                    assert model.file_paths == update_paths
-                    assert model.retriever is not None
+                    ConcreteLLMModel(file_paths=["dummy.txt"], collection_name="test_collection")
     
     def test_get_existing_sources_empty(
         self,
@@ -264,6 +202,7 @@ class TestBaseLLMModel:
             with managed_parameter("llm_setting", json.dumps(llm_config)):
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     model = ConcreteLLMModel(
+                        file_paths=["dummy.txt"],
                         collection_name=setup_postgresql_test_collection
                     )
                     
@@ -313,12 +252,13 @@ class TestBaseLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_s3_bucket(bucket_name, test_files):
                         model = ConcreteLLMModel(
+                            file_paths=list(test_files.keys()),
                             collection_name=setup_postgresql_test_collection
                         )
                         
                         # ドキュメントをインジェスト
                         file_paths = list(test_files.keys())
-                        model.ingest_documents(bucket_name, file_paths)
+                        model.ingest_documents(bucket_name)
                         
                         # 既存ソースを取得
                         existing_sources = model.get_existing_sources()
@@ -369,12 +309,13 @@ class TestBaseLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_s3_bucket(bucket_name, test_files):
                         model = ConcreteLLMModel(
+                            file_paths=list(test_files.keys()),
                             collection_name=setup_postgresql_test_collection
                         )
                         
                         # ドキュメントをインジェスト
                         file_paths = list(test_files.keys())
-                        model.ingest_documents(bucket_name, file_paths)
+                        model.ingest_documents(bucket_name)
                         
                         # 検証: 既存ソースに追加されたファイルが含まれている
                         existing_sources = model.get_existing_sources()
@@ -436,13 +377,21 @@ class TestBaseLLMModel:
         with managed_secret("postgresql_setting", json.dumps(postgresql_config)):
             with managed_parameter("llm_setting", json.dumps(llm_config)):
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
-                    model = ConcreteLLMModel(
-                        collection_name=setup_postgresql_test_collection
-                    )
-                    
-                    # エラーケース
-                    with pytest.raises(expected_error, match=error_match):
-                        model.ingest_documents(bucket_name, file_paths)
+                    if not file_paths:
+                        with pytest.raises(expected_error, match=error_match):
+                            ConcreteLLMModel(
+                                file_paths=file_paths,
+                                collection_name=setup_postgresql_test_collection
+                            )
+                    else:
+                        model = ConcreteLLMModel(
+                            file_paths=file_paths,
+                            collection_name=setup_postgresql_test_collection
+                        )
+                        
+                        # エラーケース
+                        with pytest.raises(expected_error, match=error_match):
+                            model.ingest_documents(bucket_name)
     
     def test_get_graph_implementation(
         self,
@@ -475,6 +424,7 @@ class TestBaseLLMModel:
             with managed_parameter("llm_setting", json.dumps(llm_config)):
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     model = ConcreteLLMModel(
+                        file_paths=["dummy.txt"],
                         collection_name=setup_postgresql_test_collection
                     )
                     

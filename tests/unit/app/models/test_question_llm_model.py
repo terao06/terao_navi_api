@@ -11,8 +11,8 @@ class TestQuestionLLMModel:
     
     @pytest.mark.parametrize("test_case", [
         {
-            "description": "正常に初期化できる（file_pathsなし）",
-            "file_paths": None,
+            "description": "正常に初期化できる（file_pathsあり: 1件）",
+            "file_paths": ["manual1.pdf"],
             "collection_name": "manuals",
             "postgresql_config": {
                 "user": "vector_user",
@@ -195,7 +195,7 @@ class TestQuestionLLMModel:
         ):
             with pytest.raises(expected_error, match=error_match):
                 QuestionLLMModel(
-                    file_paths=None,
+                    file_paths=["manual1.pdf"],
                     collection_name=setup_postgresql_test_collection
                 )
 
@@ -265,7 +265,7 @@ class TestQuestionLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_parameter("question_llm_setting", json.dumps(question_llm_config)):
                         model = QuestionLLMModel(
-                            file_paths=None,
+                            file_paths=["manual1.pdf"],
                             collection_name=setup_postgresql_test_collection
                         )
                         
@@ -329,7 +329,7 @@ class TestQuestionLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_parameter("question_llm_setting", json.dumps(question_llm_config)):
                         model = QuestionLLMModel(
-                            file_paths=None,
+                            file_paths=["manual1.pdf"],
                             collection_name=setup_postgresql_test_collection
                         )
                         
@@ -403,7 +403,7 @@ class TestQuestionLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_parameter("question_llm_setting", json.dumps(question_llm_config)):
                         model = QuestionLLMModel(
-                            file_paths=None,
+                            file_paths=["manual1.pdf"],
                             collection_name=setup_postgresql_test_collection
                         )
                         
@@ -460,7 +460,7 @@ class TestQuestionLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_parameter("question_llm_setting", json.dumps(question_llm_config)):
                         model = QuestionLLMModel(
-                            file_paths=None,
+                            file_paths=["manual1.pdf"],
                             collection_name=setup_postgresql_test_collection
                         )
                         
@@ -516,7 +516,7 @@ class TestQuestionLLMModel:
                 with managed_parameter("embedding_setting", json.dumps(embedding_config)):
                     with managed_parameter("question_llm_setting", json.dumps(question_llm_config)):
                         model = QuestionLLMModel(
-                            file_paths=None,
+                            file_paths=["manual1.pdf"],
                             collection_name=setup_postgresql_test_collection
                         )
                         
