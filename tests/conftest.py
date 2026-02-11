@@ -14,7 +14,7 @@ os.environ["S3_ENDPOINT"] = "http://127.0.0.1:4566"
 
 from app.core.database.mysql import MySQLDatabase
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 # すべてのモデルをインポートしてSQLAlchemyのBaseに登録
 from app.models.mysql.company_model import CompanyModel
@@ -481,8 +481,6 @@ def setup_postgresql_test_collection():
     PostgreSQL Vector DBのテスト用コレクションをセットアップするフィクスチャ
     テスト終了後にコレクションをクリーンアップする
     """
-    from sqlalchemy import create_engine, text
-    import os
     
     # PostgreSQL接続情報（docker-compose.ymlの設定に合わせる）
     connection_string = "postgresql+psycopg://vector_user:vector_password@localhost:5432/vector_db"

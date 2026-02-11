@@ -1,5 +1,4 @@
 import json
-import sys
 import pytest
 from botocore.exceptions import ClientError
 from app.core.aws.secret_manager import SecretManager

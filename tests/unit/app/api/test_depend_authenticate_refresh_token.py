@@ -8,7 +8,6 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 
 def _cred(token: str) -> HTTPAuthorizationCredentials:
-    # Simulate Authorization: Bearer <token>
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 

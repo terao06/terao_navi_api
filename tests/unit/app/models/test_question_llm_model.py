@@ -1,9 +1,8 @@
 import pytest
 import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from app.models.llm.question_llm_model import QuestionLLMModel, State
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from botocore.exceptions import ClientError
 
 
 class TestQuestionLLMModel:

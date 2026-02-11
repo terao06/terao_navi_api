@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch, MagicMock
 from app.models.requests.question_request import QuestionRequest
 from app.repositories.manual_repository import ManualDto
 from app.models.responses.question_response import QuestionResponse
+from app.services.question_service import QuestionService
 
 
 class TestQuestionService:
@@ -14,10 +15,9 @@ class TestQuestionService:
         return Mock()
 
     @pytest.mark.parametrize(
-        "test_case_name, company_id, application_id, question_text, manuals, expected_file_paths",
+        "company_id, application_id, question_text, manuals, expected_file_paths",
         [
             (
-                "application_idを指定した場合",
                 1,
                 10,
                 "この製品の使い方を教えてください",
@@ -28,7 +28,6 @@ class TestQuestionService:
                 ["manuals/1/10/100.pdf", "manuals/1/10/101.docx"]
             ),
             (
-                "application_idを指定しない場合（全マニュアル対象）",
                 1,
                 None,
                 "全体的な概要を教えてください",
@@ -40,7 +39,6 @@ class TestQuestionService:
                 ["manuals/1/10/100.pdf", "manuals/1/10/101.docx", "manuals/1/20/200.pdf"]
             ),
             (
-                "マニュアルが存在しない場合",
                 999,
                 999,
                 "何か質問",
@@ -48,7 +46,6 @@ class TestQuestionService:
                 []
             ),
             (
-                "単一マニュアルでファイルパスフォーマットを確認",
                 1,
                 99,
                 "テスト質問",
@@ -56,7 +53,6 @@ class TestQuestionService:
                 ["manuals/1/99/888.txt"]
             ),
             (
-                "複数の異なる拡張子を持つマニュアル",
                 2,
                 50,
                 "様々なファイル形式のマニュアルについて",
@@ -77,7 +73,6 @@ class TestQuestionService:
         mock_get_manuals,
         mock_llm_helper_class,
         mock_session,
-        test_case_name,
         company_id,
         application_id,
         question_text,
@@ -85,8 +80,6 @@ class TestQuestionService:
         expected_file_paths
     ):
         """answerメソッドの正常系テスト（パラメータ化）"""
-        # Arrange
-        from app.services.question_service import QuestionService
         question_service = QuestionService()
         
         expected_answer = f"回答: {question_text}"

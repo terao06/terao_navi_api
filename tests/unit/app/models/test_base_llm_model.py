@@ -1,14 +1,14 @@
 import pytest
 import json
 from app.models.llm.base_llm_model import BaseLLMModel
+from langgraph.graph import StateGraph
+from typing import TypedDict
 
 
 class ConcreteLLMModel(BaseLLMModel):
     """テスト用のBaseLLMModelの具象クラス"""
     def get_graph(self):
         # テスト用の簡易的な実装
-        from langgraph.graph import StateGraph
-        from typing import TypedDict
         
         class State(TypedDict):
             messages: list
