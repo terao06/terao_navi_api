@@ -1,6 +1,7 @@
 from sentence_transformers import SentenceTransformer
 from langchain_core.embeddings import Embeddings
 from app.core.logging import NaviApiLog
+from langchain_openai.embeddings import OpenAIEmbeddings
 
 
 class SentenceTransformerEmbeddingsModel(Embeddings):
@@ -86,3 +87,15 @@ class SentenceTransformerEmbeddingsModel(Embeddings):
         except Exception as e:
             NaviApiLog.error(f"ドキュメントの埋め込みに失敗しました: {e}")
             raise RuntimeError("ドキュメントの埋め込み処理に失敗しました")
+
+
+class EmbeddingModelManager:
+    @classmethod
+    def get_embedding_model(cls, model_name: str, api_key: str, device: str, use_api: bool):
+        if use_api:
+            return OpenAIEmbeddings(
+                model=model_name,
+                api_key=api_key)
+        return SentenceTransformerEmbeddingsModel(
+            model_name=model_name,
+            device=device)

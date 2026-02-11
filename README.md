@@ -281,6 +281,8 @@ sequenceDiagram
 
 ### テストの実行
 
+#### (テストはgpt-oss-20bでのローカルAIを使用した場合を想定しています。)
+
 ```powershell
 # すべてのテストを実行
 pytest
