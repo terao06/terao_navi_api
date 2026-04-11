@@ -137,7 +137,7 @@ hf download BAAI/bge-m3 --local-dir .
 Makefile up
 
 # 4. Dockerコンテナを起動(Windows)
-make.ps1 up
+.\make.ps1 up
 
 ```
 

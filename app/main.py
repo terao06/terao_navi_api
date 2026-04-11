@@ -14,13 +14,14 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000", # 例えばローカル開発
+    "http://localhost:3001", # フロントエンドの別ポート
     # 他の必要なオリジンもここに追加
 ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,        # 許可するオリジンのリスト
     allow_credentials=True,       # Cookie等の資格情報も許可する場合に設定
-    allow_methods=["GET", "POST", "PUT", "DELETE"],     # 許可するHTTPメソッド（"GET", "POST" など）; "*" は全てを許可
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],     # 許可するHTTPメソッド（"GET", "POST" など）; "*" は全てを許可
     allow_headers=["*"],          # 許可するHTTPヘッダー; "*" は全てを許可
 )
 
